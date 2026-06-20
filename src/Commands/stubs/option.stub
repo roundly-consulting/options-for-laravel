@@ -1,0 +1,39 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use Illuminate\Contracts\Database\Eloquent\CastsAttributes;
+use RoundlyConsulting\Options\BaseOption;
+
+final class {{ class }} extends BaseOption
+{
+    public function key(): string
+    {
+        return '{{ key }}';
+    }
+
+    public function default(): mixed
+    {
+        return null;
+    }
+
+    public function castAs(): string|CastsAttributes
+    {
+        return '{{ cast }}';
+    }
+
+    public function encrypted(): bool
+    {
+        return {{ encrypted }};
+    }
+
+    /**
+     * @return array<int, mixed>|string
+     */
+    public function rules(): array|string
+    {
+        return [];
+    }
+}
