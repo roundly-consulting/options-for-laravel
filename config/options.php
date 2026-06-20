@@ -63,4 +63,52 @@ return [
         'enabled' => env('OPTIONS_EVENTS_ENABLED', true),
         'resolved' => env('OPTIONS_EVENTS_RESOLVED', false),
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Setting groups
+    |--------------------------------------------------------------------------
+    |
+    | Optional map of short keys to OptionGroup class-strings so a group can be
+    | referenced by key from the CLI or a UI — `Options::group('billing')`.
+    |
+    | @var array<string, class-string<\RoundlyConsulting\Options\Groups\OptionGroup>>
+    */
+    'groups' => [
+        // 'billing' => App\Settings\BillingSettings::class,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Access control
+    |--------------------------------------------------------------------------
+    |
+    | Opt-in per-option authorization. When enabled, the manager enforces each
+    | option's authorizeRead()/authorizeWrite() hooks and, if use_gate is on,
+    | also consults the Laravel Gate abilities `option.read`/`option.write`
+    | (only when those abilities are defined). Disabled by default for full BC.
+    |
+    */
+    'authorization' => [
+        'enabled' => env('OPTIONS_AUTHORIZATION', false),
+        'use_gate' => env('OPTIONS_AUTHORIZATION_GATE', false),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Config bridge
+    |--------------------------------------------------------------------------
+    |
+    | Map framework/app config keys to options so DB-backed values transparently
+    | override config() at boot. Only global options are applied; a key whose
+    | option has no stored value keeps its existing config value. With
+    | config_overrides_live enabled, set()/forget() re-apply the key in-process.
+    |
+    | @var array<string, class-string<\RoundlyConsulting\Options\OptionInterface>>
+    */
+    'config_overrides' => [
+        // 'mail.from.address' => App\Options\MailFromAddressOption::class,
+    ],
+
+    'config_overrides_live' => env('OPTIONS_CONFIG_OVERRIDES_LIVE', false),
 ];

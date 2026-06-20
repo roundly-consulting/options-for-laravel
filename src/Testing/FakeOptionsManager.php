@@ -8,7 +8,11 @@ use Closure;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use PHPUnit\Framework\Assert;
+use RoundlyConsulting\Options\BaseOption;
+use RoundlyConsulting\Options\Enums\OptionChangeType;
 use RoundlyConsulting\Options\OptionsManager;
+use RoundlyConsulting\Options\Support\OptionAuthorizer;
+use RoundlyConsulting\Options\Support\OptionObservers;
 
 /**
  * In-memory options manager for tests. Never touches the database.
@@ -33,6 +37,7 @@ final class FakeOptionsManager extends OptionsManager
     public function get(string $option, ?Model $owner = null): mixed
     {
         $instance = $this->resolve($option, $owner);
+        $this->guardRead($instance, $owner);
         $scope = $this->scope($owner);
         $key = $instance->key();
 
@@ -46,15 +51,19 @@ final class FakeOptionsManager extends OptionsManager
     public function set(string $option, mixed $value, ?Model $owner = null): void
     {
         $instance = $this->resolve($option, $owner);
+        $this->guardWrite($instance, $owner);
         $scope = $this->scope($owner);
 
         $this->store[$scope][$instance->key()] = $value;
         $this->sets[] = ['key' => $instance->key(), 'value' => $value, 'owner' => $owner];
+
+        app(OptionObservers::class)->dispatch($instance->key(), OptionChangeType::Set, $value, $owner);
     }
 
     public function has(string $option, ?Model $owner = null): bool
     {
         $instance = $this->resolve($option, $owner);
+        $this->guardRead($instance, $owner);
 
         return array_key_exists($instance->key(), $this->store[$this->scope($owner)] ?? []);
     }
@@ -62,10 +71,13 @@ final class FakeOptionsManager extends OptionsManager
     public function forget(string $option, ?Model $owner = null): void
     {
         $instance = $this->resolve($option, $owner);
+        $this->guardWrite($instance, $owner);
         $scope = $this->scope($owner);
 
         unset($this->store[$scope][$instance->key()]);
         $this->forgotten[] = ['key' => $instance->key(), 'owner' => $owner];
+
+        app(OptionObservers::class)->dispatch($instance->key(), OptionChangeType::Forgotten, null, $owner);
     }
 
     public function reset(string $option, ?Model $owner = null): void
@@ -132,6 +144,20 @@ final class FakeOptionsManager extends OptionsManager
     public function assertNothingSet(): void
     {
         Assert::assertSame([], $this->sets, 'Failed asserting that no options were set.');
+    }
+
+    private function guardRead(mixed $instance, ?Model $owner): void
+    {
+        if ($instance instanceof BaseOption) {
+            app(OptionAuthorizer::class)->read($instance, $owner);
+        }
+    }
+
+    private function guardWrite(mixed $instance, ?Model $owner): void
+    {
+        if ($instance instanceof BaseOption) {
+            app(OptionAuthorizer::class)->write($instance, $owner);
+        }
     }
 
     private function ownersMatch(?Model $a, ?Model $b): bool

@@ -8,6 +8,8 @@ use Closure;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Facade;
+use RoundlyConsulting\Options\Groups\OptionGroup;
+use RoundlyConsulting\Options\Groups\PendingGroup;
 use RoundlyConsulting\Options\OptionContext;
 use RoundlyConsulting\Options\OptionInterface;
 use RoundlyConsulting\Options\OptionsManager;
@@ -32,6 +34,15 @@ use RoundlyConsulting\Options\Testing\FakeOptionsManager;
  * @method static array<string, class-string<OptionInterface>> registered()
  * @method static class-string<OptionInterface> resolveClass(string $option)
  * @method static void flushCache()
+ * @method static PendingGroup group(string|OptionGroup $group, ?Model $owner = null)
+ * @method static mixed actingAs(?\Illuminate\Contracts\Auth\Authenticatable $user, Closure $callback)
+ * @method static mixed withoutAuthorization(Closure $callback)
+ * @method static void overrides(string $configKey, string $option)
+ * @method static array<string, class-string<OptionInterface>> configOverrides()
+ * @method static void applyConfigOverrides()
+ * @method static void observe(string $option, Closure|class-string $callback)
+ * @method static void forgetObservers(string $option)
+ * @method static void flushObservers()
  *
  * @see OptionsManager
  */

@@ -5,10 +5,17 @@ declare(strict_types=1);
 namespace RoundlyConsulting\Options;
 
 use Closure;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use RoundlyConsulting\Options\Exceptions\InvalidOptionClassName;
+use RoundlyConsulting\Options\Exceptions\InvalidOptionGroup;
+use RoundlyConsulting\Options\Groups\OptionGroup;
+use RoundlyConsulting\Options\Groups\PendingGroup;
 use RoundlyConsulting\Options\Support\Cache;
+use RoundlyConsulting\Options\Support\ConfigBridge;
+use RoundlyConsulting\Options\Support\OptionAuthorizer;
+use RoundlyConsulting\Options\Support\OptionObservers;
 use RoundlyConsulting\Options\Support\OptionStore;
 use RoundlyConsulting\Options\Testing\FakeOptionsManager;
 
@@ -203,12 +210,110 @@ class OptionsManager
     }
 
     /**
+     * Register a callback fired when the given option changes (set or forget).
+     *
+     * The callback receives (mixed $value, ?Model $owner, OptionChange $change)
+     * and may be a Closure or an invokable class-string.
+     *
+     * @param  class-string<OptionInterface>|string  $option
+     * @param  Closure|class-string  $callback
+     */
+    public function observe(string $option, Closure|string $callback): void
+    {
+        app(OptionObservers::class)->observe($option, $callback);
+    }
+
+    /**
+     * Remove all observers registered for one option (class-string or key).
+     *
+     * @param  class-string<OptionInterface>|string  $option
+     */
+    public function forgetObservers(string $option): void
+    {
+        app(OptionObservers::class)->forget($option);
+    }
+
+    /**
+     * Remove every registered observer.
+     */
+    public function flushObservers(): void
+    {
+        app(OptionObservers::class)->flush();
+    }
+
+    /**
+     * Start a fluent builder for a setting group.
+     *
+     * @param  class-string<OptionGroup>|OptionGroup  $group
+     */
+    public function group(string|OptionGroup $group, ?Model $owner = null): PendingGroup
+    {
+        $instance = $group instanceof OptionGroup
+            ? $group
+            : $this->resolveGroup($this->resolveGroupClass($group));
+
+        return new PendingGroup($this, $instance, $owner);
+    }
+
+    /**
+     * Run the callback authorizing option access as the given user.
+     */
+    public function actingAs(?Authenticatable $user, Closure $callback): mixed
+    {
+        return app(OptionAuthorizer::class)->actingAs($user, $callback);
+    }
+
+    /**
+     * Disable enforcement for the duration of the callback.
+     */
+    public function withoutAuthorization(Closure $callback): mixed
+    {
+        return app(OptionAuthorizer::class)->withoutAuthorization($callback);
+    }
+
+    /**
+     * Register (or override) a config-key → option mapping at runtime.
+     *
+     * @param  class-string<OptionInterface>|string  $option
+     */
+    public function overrides(string $configKey, string $option): void
+    {
+        app(ConfigBridge::class)->add($configKey, $this->resolveClass($option));
+    }
+
+    /**
+     * The active config override map.
+     *
+     * @return array<string, class-string<OptionInterface>>
+     */
+    public function configOverrides(): array
+    {
+        return app(ConfigBridge::class)->mappings();
+    }
+
+    /**
+     * Re-read every mapped option and push values into config() now.
+     */
+    public function applyConfigOverrides(): void
+    {
+        app(ConfigBridge::class)->apply();
+    }
+
+    /**
      * Flush the in-request and persistent option value caches.
      */
     public function flushCache(): void
     {
         Cache::getInstance()->flush();
         app(OptionStore::class)->flush();
+    }
+
+    /**
+     * Resolve a global-scope BaseOption instance (used by the config bridge).
+     */
+    public function resolveOptionInstance(string $option, ?Model $owner = null): BaseOption
+    {
+        return $this->resolveOption($option, $owner);
     }
 
     /**
@@ -220,6 +325,41 @@ class OptionsManager
 
         if (! $instance instanceof BaseOption) {
             throw InvalidOptionClassName::for($option);
+        }
+
+        return $instance;
+    }
+
+    /**
+     * Resolve a registered group key or a raw class-string to a group class-string.
+     *
+     * @return class-string<OptionGroup>
+     */
+    private function resolveGroupClass(string $group): string
+    {
+        /** @var array<string, class-string<OptionGroup>> $groups */
+        $groups = config('options.groups', []);
+
+        if (isset($groups[$group])) {
+            $group = $groups[$group];
+        }
+
+        if (! class_exists($group) || ! is_subclass_of($group, OptionGroup::class)) {
+            throw InvalidOptionGroup::for($group);
+        }
+
+        return $group;
+    }
+
+    /**
+     * @param  class-string<OptionGroup>  $group
+     */
+    private function resolveGroup(string $group): OptionGroup
+    {
+        $instance = app()->make($group);
+
+        if (! $instance instanceof OptionGroup) {
+            throw InvalidOptionGroup::for($group);
         }
 
         return $instance;

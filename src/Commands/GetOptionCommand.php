@@ -5,17 +5,20 @@ declare(strict_types=1);
 namespace RoundlyConsulting\Options\Commands;
 
 use Illuminate\Console\Command;
+use RoundlyConsulting\Options\Commands\Concerns\ActsAsUser;
 use RoundlyConsulting\Options\Commands\Concerns\ResolvesOwner;
 use RoundlyConsulting\Options\Exceptions\OptionException;
 use RoundlyConsulting\Options\OptionsManager;
 
 final class GetOptionCommand extends Command
 {
+    use ActsAsUser;
     use ResolvesOwner;
 
     protected $signature = 'options:get {option : Registered key or option class-string}
         {--owner= : Owner model class}
-        {--owner-id= : Owner model id}';
+        {--owner-id= : Owner model id}
+        {--as= : Authorize as the user with this key (default: bypass auth)}';
 
     protected $description = 'Print the resolved value of an option';
 
@@ -26,7 +29,7 @@ final class GetOptionCommand extends Command
 
         try {
             $owner = $this->resolveOwner();
-            $value = $manager->get($option, $owner);
+            $value = $this->withAuthorizationContext($manager, fn (): mixed => $manager->get($option, $owner));
         } catch (OptionException $exception) {
             $this->error($exception->getMessage());
 

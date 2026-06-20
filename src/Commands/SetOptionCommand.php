@@ -6,19 +6,22 @@ namespace RoundlyConsulting\Options\Commands;
 
 use Illuminate\Console\Command;
 use JsonException;
+use RoundlyConsulting\Options\Commands\Concerns\ActsAsUser;
 use RoundlyConsulting\Options\Commands\Concerns\ResolvesOwner;
 use RoundlyConsulting\Options\Exceptions\OptionException;
 use RoundlyConsulting\Options\OptionsManager;
 
 final class SetOptionCommand extends Command
 {
+    use ActsAsUser;
     use ResolvesOwner;
 
     protected $signature = 'options:set {option : Registered key or option class-string}
         {value : The value to store}
         {--owner= : Owner model class}
         {--owner-id= : Owner model id}
-        {--json : Decode the value as JSON before storing}';
+        {--json : Decode the value as JSON before storing}
+        {--as= : Authorize as the user with this key (default: bypass auth)}';
 
     protected $description = 'Persist a value for an option';
 
@@ -31,7 +34,9 @@ final class SetOptionCommand extends Command
 
         try {
             $owner = $this->resolveOwner();
-            $manager->set($option, $this->castValue($value), $owner);
+            $this->withAuthorizationContext($manager, function () use ($manager, $option, $value, $owner): void {
+                $manager->set($option, $this->castValue($value), $owner);
+            });
         } catch (OptionException $exception) {
             $this->error($exception->getMessage());
 
