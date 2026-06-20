@@ -9,3 +9,6 @@ parameters:
         - database
         - tests/Models
         - tests/Options
+    # This package ships its own config/ dir; env() is correct there.
+    configDirectories:
+        - config

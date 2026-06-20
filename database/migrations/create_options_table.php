@@ -13,11 +13,13 @@ return new class extends Migration
         Schema::create('options', function (Blueprint $table): void {
             $table->id();
             $table->nullableMorphs('owner');
-            $table->string('key');
-            $table->string('value')->nullable();
+            $table->string('key')->index();
+            $table->text('value')->nullable();
             $table->json('meta')->nullable();
             $table->timestamps();
             $table->softDeletes();
+
+            $table->index(['owner_type', 'owner_id', 'key']);
         });
     }
 };
