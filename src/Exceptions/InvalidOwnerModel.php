@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\Options\Exceptions;
 
-final class InvalidOptionClassName extends OptionException
+final class InvalidOwnerModel extends OptionException
 {
     public static function for(string $class): self
     {
-        return new self("Invalid class name provided for option selection. [{$class}]");
+        return new self("The owner class is not an Eloquent model. [{$class}]");
     }
 }
