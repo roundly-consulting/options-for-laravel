@@ -4,10 +4,18 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\Options;
 
+use Closure;
 use Illuminate\Contracts\Database\Eloquent\CastsAttributes;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Validator;
+use RoundlyConsulting\Options\Casts\EncryptedCast;
+use RoundlyConsulting\Options\Events\OptionForgotten;
+use RoundlyConsulting\Options\Events\OptionResolved;
+use RoundlyConsulting\Options\Events\OptionSet;
+use RoundlyConsulting\Options\Exceptions\EncryptionNotSupported;
 use RoundlyConsulting\Options\Support\Cache;
+use RoundlyConsulting\Options\Support\OptionStore;
 
 /**
  * @phpstan-consistent-constructor
@@ -43,12 +51,22 @@ abstract class BaseOption implements OptionInterface
     public function value(): mixed
     {
         $cache = Cache::getInstance();
+        $fingerprint = $this->fingerprint();
 
-        if ($cache->has($fingerprint = $this->fingerprint())) {
-            return $cache->get($fingerprint);
+        if ($cache->has($fingerprint)) {
+            $value = $cache->get($fingerprint);
+        } else {
+            $value = $this->store()->remember(
+                $fingerprint,
+                fn (): mixed => $this->retrieveValueFromDatabase(),
+            );
+
+            $cache->put($fingerprint, $value);
         }
 
-        return $cache->put($fingerprint, $this->retrieveValueFromDatabase());
+        $this->dispatchResolved($value);
+
+        return $value;
     }
 
     public function default(): mixed
@@ -64,18 +82,120 @@ abstract class BaseOption implements OptionInterface
         return 'string';
     }
 
+    /**
+     * Whether the value should be encrypted at rest.
+     */
+    public function encrypted(): bool
+    {
+        return false;
+    }
+
+    /**
+     * Laravel validation rules applied to the value on set(). Empty = no validation.
+     *
+     * @return array<int, mixed>|string
+     */
+    public function rules(): array|string
+    {
+        return [];
+    }
+
     public function set(mixed $value): void
     {
+        $this->validate($value);
+
+        $cast = $this->resolveCast();
+
         $option = $this->getModelQuery()
             ->forOwner($this->owner)
             ->firstOrNew(['key' => $this->key()]);
 
-        $option->whileCastingValueAs($this->castAs(), function () use ($option, $value): void {
+        if (! $option->exists && ! is_null($this->owner)) {
+            $option->owner()->associate($this->owner);
+        }
+
+        $option->whileCastingValueAs($cast, function () use ($option, $value): void {
             $option->value = $value;
             $option->save();
         });
 
         Cache::getInstance()->put($this->fingerprint(), $value);
+        $this->store()->put($this->fingerprint(), $value);
+
+        if ($this->eventsEnabled()) {
+            OptionSet::dispatch($this->key(), $value, $this->owner);
+        }
+    }
+
+    public function has(): bool
+    {
+        return $this->getModelQuery()
+            ->forOwner($this->owner)
+            ->where('key', $this->key())
+            ->exists();
+    }
+
+    public function forget(): void
+    {
+        $this->getModelQuery()
+            ->forOwner($this->owner)
+            ->where('key', $this->key())
+            ->get()
+            ->each(fn (Option $option) => $option->delete());
+
+        Cache::getInstance()->forget($this->fingerprint());
+        $this->store()->forget($this->fingerprint());
+
+        if ($this->eventsEnabled()) {
+            OptionForgotten::dispatch($this->key(), $this->owner);
+        }
+    }
+
+    public function reset(): void
+    {
+        $this->forget();
+    }
+
+    public function remember(Closure $callback): mixed
+    {
+        if ($this->has()) {
+            return $this->value();
+        }
+
+        $value = $callback();
+
+        $this->set($value);
+
+        return $value;
+    }
+
+    protected function validate(mixed $value): void
+    {
+        $rules = $this->rules();
+
+        if ($rules === [] || $rules === '') {
+            return;
+        }
+
+        Validator::make(['value' => $value], ['value' => $rules])->validate();
+    }
+
+    /**
+     * @return CastsAttributes<mixed, mixed>|string
+     */
+    protected function resolveCast(): string|CastsAttributes
+    {
+        if (! $this->encrypted()) {
+            return $this->castAs();
+        }
+
+        $inner = $this->castAs();
+
+        if (! is_string($inner)) {
+            throw EncryptionNotSupported::forCastInstance(static::class);
+        }
+
+        return EncryptedCast::class.':'.$inner;
     }
 
     protected function retrieveValueFromDatabase(): mixed
@@ -89,7 +209,30 @@ abstract class BaseOption implements OptionInterface
             return $this->default();
         }
 
-        return $option->castValueAs($this->castAs());
+        return $option->castValueAs($this->resolveCast());
+    }
+
+    protected function dispatchResolved(mixed $value): void
+    {
+        if (! $this->eventsEnabled()) {
+            return;
+        }
+
+        if (! config('options.events.resolved', false)) {
+            return;
+        }
+
+        OptionResolved::dispatch($this->key(), $value, $this->owner);
+    }
+
+    protected function eventsEnabled(): bool
+    {
+        return (bool) config('options.events.enabled', true);
+    }
+
+    protected function store(): OptionStore
+    {
+        return app(OptionStore::class);
     }
 
     protected function fingerprint(): string
