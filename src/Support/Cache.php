@@ -35,6 +35,11 @@ final class Cache
         return $this->cache[$key];
     }
 
+    public function forget(string $key): void
+    {
+        unset($this->cache[$key]);
+    }
+
     public function flush(): void
     {
         $this->cache = [];
