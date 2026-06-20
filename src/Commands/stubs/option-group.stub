@@ -1,0 +1,31 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use RoundlyConsulting\Options\Groups\OptionGroup;
+use RoundlyConsulting\Options\OptionInterface;
+
+final class {{ class }} extends OptionGroup
+{
+    public function label(): string
+    {
+        return '{{ label }}';
+    }
+
+    public function description(): ?string
+    {
+        return null;
+    }
+
+    /**
+     * @return list<class-string<OptionInterface>>
+     */
+    public function options(): array
+    {
+        return [
+{{ options }}
+        ];
+    }
+}
