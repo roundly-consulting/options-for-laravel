@@ -15,6 +15,7 @@ use RoundlyConsulting\Options\Groups\PendingGroup;
 use RoundlyConsulting\Options\Support\Cache;
 use RoundlyConsulting\Options\Support\ConfigBridge;
 use RoundlyConsulting\Options\Support\OptionAuthorizer;
+use RoundlyConsulting\Options\Support\OptionModel;
 use RoundlyConsulting\Options\Support\OptionObservers;
 use RoundlyConsulting\Options\Support\OptionStore;
 use RoundlyConsulting\Options\Testing\FakeOptionsManager;
@@ -200,8 +201,7 @@ class OptionsManager
      */
     public function all(?Model $owner = null): Collection
     {
-        /** @var class-string<Option> $model */
-        $model = config('options.model', Option::class);
+        $model = OptionModel::class();
 
         return $model::query()
             ->forOwner($owner)

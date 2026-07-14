@@ -17,6 +17,7 @@ use RoundlyConsulting\Options\Events\OptionSet;
 use RoundlyConsulting\Options\Exceptions\EncryptionNotSupported;
 use RoundlyConsulting\Options\Support\Cache;
 use RoundlyConsulting\Options\Support\OptionAuthorizer;
+use RoundlyConsulting\Options\Support\OptionModel;
 use RoundlyConsulting\Options\Support\OptionStore;
 
 /**
@@ -319,8 +320,7 @@ abstract class BaseOption implements OptionInterface
      */
     protected function getModelQuery(): Builder
     {
-        /** @var class-string<Option> $model */
-        $model = config('options.model', Option::class);
+        $model = OptionModel::class();
 
         return $model::query();
     }

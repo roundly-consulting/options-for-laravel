@@ -25,8 +25,11 @@ use RoundlyConsulting\Options\Database\Factories\OptionFactory;
  * @property CarbonInterface|null $created_at
  * @property CarbonInterface|null $updated_at
  * @property CarbonInterface|null $deleted_at
+ *
+ * Deliberately not final: `options.model` documents swapping in a host model
+ * that extends this one.
  */
-final class Option extends Model
+class Option extends Model
 {
     /** @use HasFactory<OptionFactory> */
     use HasFactory;

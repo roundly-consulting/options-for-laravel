@@ -7,6 +7,7 @@ namespace RoundlyConsulting\Options\Actions;
 use Illuminate\Database\Eloquent\Model;
 use RoundlyConsulting\Options\DataTransferObjects\OptionPayload;
 use RoundlyConsulting\Options\Option;
+use RoundlyConsulting\Options\Support\OptionModel;
 
 final class ExportOptionsAction
 {
@@ -18,8 +19,7 @@ final class ExportOptionsAction
      */
     public function execute(?Model $owner = null, bool $globalOnly = false): array
     {
-        /** @var class-string<Option> $model */
-        $model = config('options.model', Option::class);
+        $model = OptionModel::class();
 
         $query = $model::query();
 

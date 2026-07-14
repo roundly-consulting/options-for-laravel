@@ -7,8 +7,8 @@ namespace RoundlyConsulting\Options\Actions;
 use JsonException;
 use RoundlyConsulting\Options\DataTransferObjects\OptionPayload;
 use RoundlyConsulting\Options\Exceptions\InvalidOptionPayload;
-use RoundlyConsulting\Options\Option;
 use RoundlyConsulting\Options\Support\Cache;
+use RoundlyConsulting\Options\Support\OptionModel;
 
 final class ImportOptionsAction
 {
@@ -19,8 +19,7 @@ final class ImportOptionsAction
      */
     public function execute(array $payloads): int
     {
-        /** @var class-string<Option> $model */
-        $model = config('options.model', Option::class);
+        $model = OptionModel::class();
 
         $count = 0;
 
