@@ -500,6 +500,19 @@ Run the package test suite with:
 composer test
 ```
 
+## Integrates with
+
+This package builds on other roundly-consulting packages:
+
+- **[package-toolkit-for-laravel](https://github.com/roundly-consulting/package-toolkit-for-laravel)**
+  — a hard dependency. It provides the service-provider builder (config, migrations, commands,
+  the `@option` Blade directive and the publish tags) and the validated `options.model` resolver,
+  which checks that a swapped-in model really is an option model before the package queries
+  through it. The package also reports its configuration to Laravel's `about` command
+  (`php artisan about --only=options`); option keys, group keys and bridged config paths are
+  reported by **count only** — a key names a host's setting and its value is arbitrary host data
+  (tokens, feature flags, PII), so neither ever renders.
+
 ## Changelog
 
 Please see [CHANGELOG](CHANGELOG.md) for what has changed recently.
