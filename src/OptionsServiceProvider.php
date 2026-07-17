@@ -22,12 +22,14 @@ use RoundlyConsulting\Options\Support\OptionModel;
 use RoundlyConsulting\Options\Support\OptionObservers;
 use RoundlyConsulting\Options\Support\OptionStore;
 use RoundlyConsulting\PackageToolkit\Concerns\RegistersBladeDirectives;
+use RoundlyConsulting\PackageToolkit\Concerns\RegistersBlueprintMacros;
 use RoundlyConsulting\PackageToolkit\Package;
 use RoundlyConsulting\PackageToolkit\PackageServiceProvider;
 
 final class OptionsServiceProvider extends PackageServiceProvider
 {
     use RegistersBladeDirectives;
+    use RegistersBlueprintMacros;
 
     public function configurePackage(Package $package): void
     {
@@ -78,6 +80,11 @@ final class OptionsServiceProvider extends PackageServiceProvider
     public function boot(): void
     {
         parent::boot();
+
+        // The options migration keys its `owner` polymorphic column through the toolkit's
+        // `morphKey` macro, so it must exist before the migration runs. Registration is
+        // idempotent — the toolkit guards it with `hasMacro()`.
+        $this->registerBlueprintMacros();
 
         $this->registerBladeDirective(
             'option',

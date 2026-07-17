@@ -18,7 +18,7 @@ declare(strict_types=1);
  * knob from a dead one.
  */
 it('ships exactly the config keys it reads', function (): void {
-    expect(__DIR__.'/../../config/options.php')->toSatisfyConfigContract(__DIR__.'/../../src', [
+    expect(__DIR__.'/../../config/options.php')->toSatisfyConfigContract([__DIR__.'/../../src', __DIR__.'/../../database'], [
         // `options.model` is read through the toolkit's `ModelResolver::for('options.model',
         // …)` seam rather than a `config()` call. It is a real read — it drives the whole
         // model swap — but it is not a `config(` token, so the prefix is what makes it

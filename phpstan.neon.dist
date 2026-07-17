@@ -1,5 +1,9 @@
 includes:
     - vendor/larastan/larastan/extension.neon
+    # The toolkit's schema-macro stub (morphKey, ownerKey, auditable, …). Auto-included
+    # elsewhere via phpstan/extension-installer; this package includes larastan manually,
+    # so it must include the toolkit extension manually too.
+    - vendor/roundly-consulting/package-toolkit-for-laravel/extension.neon
 
 parameters:
     level: 7
