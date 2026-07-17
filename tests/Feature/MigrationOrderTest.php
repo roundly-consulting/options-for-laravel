@@ -23,8 +23,6 @@ use RoundlyConsulting\Testing\Database\DriverMatrix;
  *    design: the assertion working correctly against a shape it does not fit, not a red to
  *    chase.
  */
-$migrations = __DIR__.'/../../database/migrations';
-
 /**
  * P — the publish-only guards. The fleet publishes migrations timestamped rather than
  * auto-loading them; doing both runs both copies and dies on a duplicate table (bug #5, on
@@ -39,15 +37,28 @@ it('publishes its migration timestamp-injected into the host', function (): void
     expect(OptionsServiceProvider::class)->toPublishMigrationsTimestamped('options-migrations', 1);
 });
 
-/**
- * R — the real-engine proof. Options' DDL had never met a real engine: the suite ran on
- * SQLite for the package's whole life. `migrations: 1` pins the count, and the expectation
- * additionally fails a set that "applies cleanly" while creating no tables — an empty
- * `up()` otherwise passes and proves nothing.
+/*
+ * R (`toApplyOnConnection('pgsql', migrations: 1)`) is DEFERRED, not rejected — it belongs
+ * here and should land once the testing package is fixed.
+ *
+ * It cannot be adopted today because it is **not safe to run alongside its own suite**. On
+ * the pgsql leg, `DriverMatrix::configure()` builds `connections.testing` and
+ * `connections.pgsql` from the same `connectionConfig('pgsql')` — identical host, port and
+ * database. They are one physical database reached through two PDO sessions.
+ * `MigrationRunner::runFiles()` calls `dropAllTables()` on entry and again in its `finally`,
+ * so the assertion drops the live suite's tables mid-run, and `executionOrder="random"`
+ * decides whether anything was still using them.
+ *
+ * Measured on the sibling addresses row, on a database isolated from every other suite, with
+ * R present: 6 runs gave 5 × 94 passed and 1 × 13 failed. It is ~1-in-6, seed-dependent, and
+ * it fails *elsewhere* — innocent tests die, not this one. A green pgsql leg with R in it is
+ * therefore evidence of a lucky seed and nothing else, which is the precise failure this
+ * whole plan exists to kill: an assertion that cannot be trusted when it passes.
+ *
+ * Everything else on this row is unaffected and stays: P above is a structural check on the
+ * provider and needs no engine at all, and the round-trip is an ordinary test on the default
+ * connection.
  */
-it('applies its migration on postgres', function () use ($migrations): void {
-    expect($migrations)->toApplyOnConnection('pgsql', migrations: 1);
-})->skip(fn (): bool => ! test()->connectionAvailable('pgsql'), 'no postgres connection available');
 
 /**
  * The `text` value column, the `json` meta column and the composite owner index are what
