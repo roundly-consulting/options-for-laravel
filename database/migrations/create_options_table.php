@@ -15,7 +15,7 @@ return new class extends Migration
             $table->nullableMorphs('owner');
             $table->string('key')->index();
             $table->text('value')->nullable();
-            $table->json('meta')->nullable();
+            $table->jsonb('meta')->nullable();
             $table->timestamps();
             $table->softDeletes();
 
