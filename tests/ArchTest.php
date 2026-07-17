@@ -95,6 +95,15 @@ ArchPresets::noLocalCryptoPrimitives('RoundlyConsulting\Options');
  */
 
 /**
+ * The morph-key seam, guarded. The options table reaches its polymorphic owner column through
+ * `morphKey($name, KeyType::fromConfig('options.key_type'))`, never a raw `$table->morphs()`,
+ * so a uuid/ulid host keys option ownership coherently — a hardcoded bigint id breaks those
+ * hosts on Postgres, and SQLite type affinity hides it. This pin reds if a future migration
+ * reintroduces a raw morph and bypasses the seam.
+ */
+ArchPresets::morphColumnsUseTheSeam(__DIR__.'/../database/migrations');
+
+/**
  * The Dependency Policy as a test. No `alsoAllow`: options' `require` ships only
  * php/illuminate/roundly, and the workflow installs test tooling with `--dev`, so nothing
  * legitimately lands in `require` that this must forgive. If this goes red, the graph is
