@@ -27,15 +27,23 @@ ArchPresets::strictTypes('RoundlyConsulting\Options');
  *    own test double, so closing it would break the fake it ships.
  *  - OptionException — the base every options error extends, so a host can catch them
  *    uniformly.
+ *
+ * The list goes through the `$ignoring` PARAMETER rather than Pest's fluent `->ignoring()`,
+ * which is neither rot-checked nor shadow-recovered. Both matter here, and the second one
+ * is not hypothetical: Pest matches exemptions by string PREFIX (pest-plugin-arch
+ * Blueprint.php:103), and `Option::class` is a prefix of half this package. It silently
+ * also silences `OptionContext` and `OptionsServiceProvider` — neither of which anyone
+ * exempted — and it reaches `OptionsManager` too, which is named above anyway. Through the
+ * parameter, `finalByDefault` re-checks the unnamed two by reflection; both are final, so
+ * this is green today and stays a guard against either being opened later.
  */
-ArchPresets::finalByDefault('RoundlyConsulting\Options')
-    ->ignoring([
-        Option::class,
-        BaseOption::class,
-        OptionGroup::class,
-        OptionsManager::class,
-        OptionException::class,
-    ]);
+ArchPresets::finalByDefault('RoundlyConsulting\Options', [
+    Option::class,
+    BaseOption::class,
+    OptionGroup::class,
+    OptionsManager::class,
+    OptionException::class,
+]);
 
 /**
  * The counter-weight, and the fleet's 7×-shipped fatal: `final` on a config-swappable
