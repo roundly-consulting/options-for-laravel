@@ -278,8 +278,8 @@ public function encrypted(): bool
 
 ### Validation
 
-Return Laravel validation rules from `rules()` to validate on write (empty by default, so no
-behaviour change unless you opt in):
+Return Laravel validation rules from `rules()` to validate on write (empty by default, so a write
+is only validated when the option returns rules):
 
 ```php
 public function rules(): array|string

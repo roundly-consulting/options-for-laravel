@@ -101,7 +101,7 @@ return [
     | Opt-in per-option authorization. When enabled, the manager enforces each
     | option's authorizeRead()/authorizeWrite() hooks and, if use_gate is on,
     | also consults the Laravel Gate abilities `option.read`/`option.write`
-    | (only when those abilities are defined). Disabled by default for full BC.
+    | (only when those abilities are defined). Disabled by default.
     |
     */
     'authorization' => [
