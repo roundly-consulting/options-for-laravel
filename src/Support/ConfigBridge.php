@@ -26,8 +26,6 @@ final class ConfigBridge
      */
     private array $originals = [];
 
-    public function __construct(private readonly OptionsManager $manager) {}
-
     /**
      * Seed the map from the configured config_overrides array.
      *
@@ -39,7 +37,7 @@ final class ConfigBridge
         $this->originals = [];
 
         foreach ($map as $configKey => $option) {
-            $this->mappings[$configKey] = $this->manager->resolveClass($option);
+            $this->mappings[$configKey] = $this->manager()->resolveClass($option);
         }
     }
 
@@ -115,6 +113,9 @@ final class ConfigBridge
     /**
      * Apply a single mapping, skipping keys whose option has no stored value.
      *
+     * The bridge is system code — it runs at boot, before any user exists — so
+     * it reads without per-option authorization.
+     *
      * @param  class-string<OptionInterface>  $option
      */
     private function applyKey(string $configKey, string $option, bool $revertWhenUnset = false): void
@@ -123,16 +124,26 @@ final class ConfigBridge
             $this->originals[$configKey] = config($configKey);
         }
 
-        $instance = $this->manager->resolveOptionInstance($option);
+        $instance = $this->manager()->resolveOptionInstance($option);
 
-        if (! $instance->has()) {
-            if ($revertWhenUnset) {
-                config()->set($configKey, $this->originals[$configKey]);
+        app(OptionAuthorizer::class)->withoutAuthorization(function () use ($instance, $configKey, $revertWhenUnset): void {
+            if (! $instance->has()) {
+                if ($revertWhenUnset) {
+                    config()->set($configKey, $this->originals[$configKey]);
+                }
+
+                return;
             }
 
-            return;
-        }
+            config()->set($configKey, $instance->value());
+        });
+    }
 
-        config()->set($configKey, $instance->value());
+    /**
+     * Resolved per call, so `Options::fake()` (which swaps the binding) is used.
+     */
+    private function manager(): OptionsManager
+    {
+        return app(OptionsManager::class);
     }
 }

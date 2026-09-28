@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Schema;
 use RoundlyConsulting\Options\Facades\Options;
 use RoundlyConsulting\Options\Support\ConfigBridge;
+use RoundlyConsulting\Options\Tests\Options\AdminOnlyOption;
 use RoundlyConsulting\Options\Tests\Options\MailFromOption;
 use RoundlyConsulting\Options\Tests\Options\ThemeOption;
 
@@ -111,4 +112,20 @@ it('does not throw at boot when the options table is absent', function (): void 
     rescue(fn () => $bridge->apply(), report: false);
 
     expect(config('mail.from.address'))->toBe('original@test');
+});
+
+it('reads mapped options without authorization', function (): void {
+    Options::withoutAuthorization(fn () => Options::set(AdminOnlyOption::class, 'from-db'));
+    config()->set('custom.key', 'env-default');
+    config()->set('options.authorization.enabled', true);
+
+    // No user: authorizeRead denies. The bridge is system code and must not care.
+    Options::overrides('custom.key', AdminOnlyOption::class);
+
+    expect(config('custom.key'))->toBe('from-db');
+
+    config()->set('custom.key', 'changed');
+    Options::applyConfigOverrides();
+
+    expect(config('custom.key'))->toBe('from-db');
 });
