@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use RoundlyConsulting\Options\BaseOption;
 use RoundlyConsulting\Options\Exceptions\UnauthorizedOption;
+use RoundlyConsulting\PackageToolkit\Support\Config;
 
 /**
  * Central, opt-in enforcement of per-option read/write authorization.
@@ -120,7 +121,7 @@ final class OptionAuthorizer
             return false;
         }
 
-        return (bool) config('options.authorization.enabled', false);
+        return Config::boolean('options.authorization.enabled', false);
     }
 
     private function currentUser(): ?Authenticatable
@@ -134,7 +135,7 @@ final class OptionAuthorizer
 
     private function passesGate(string $ability, ?Authenticatable $user, BaseOption $option, ?Model $owner): bool
     {
-        if (! config('options.authorization.use_gate', false)) {
+        if (! Config::boolean('options.authorization.use_gate', false)) {
             return true;
         }
 

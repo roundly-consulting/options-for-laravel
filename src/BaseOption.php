@@ -22,6 +22,7 @@ use RoundlyConsulting\Options\Support\OptionModel;
 use RoundlyConsulting\Options\Support\OptionStore;
 use RoundlyConsulting\Options\Support\StoredValue;
 use RoundlyConsulting\Options\Support\ValueCaster;
+use RoundlyConsulting\PackageToolkit\Support\Config;
 
 /**
  * A setting. Extend it and override the hooks (`key`, `default`, `castAs`,
@@ -455,7 +456,7 @@ abstract class BaseOption implements OptionInterface
             return;
         }
 
-        if (! config('options.events.resolved', false)) {
+        if (! Config::boolean('options.events.resolved', false)) {
             return;
         }
 
@@ -464,7 +465,7 @@ abstract class BaseOption implements OptionInterface
 
     protected function eventsEnabled(): bool
     {
-        return (bool) config('options.events.enabled', true);
+        return Config::boolean('options.events.enabled', true);
     }
 
     protected function store(): OptionStore

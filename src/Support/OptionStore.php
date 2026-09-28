@@ -10,6 +10,7 @@ use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Contracts\Cache\Store;
 use Illuminate\Support\Facades\Cache as CacheManager;
 use Illuminate\Support\Str;
+use RoundlyConsulting\PackageToolkit\Support\Config;
 
 /**
  * Persistent cache layer for stored option values, sitting on top of the
@@ -44,7 +45,7 @@ final class OptionStore
 
     public function isEnabled(): bool
     {
-        return (bool) config('options.cache.enabled', true);
+        return Config::boolean('options.cache.enabled', true);
     }
 
     /**

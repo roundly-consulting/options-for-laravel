@@ -27,6 +27,7 @@ use RoundlyConsulting\PackageToolkit\Concerns\RegistersBladeDirectives;
 use RoundlyConsulting\PackageToolkit\Concerns\RegistersBlueprintMacros;
 use RoundlyConsulting\PackageToolkit\Package;
 use RoundlyConsulting\PackageToolkit\PackageServiceProvider;
+use RoundlyConsulting\PackageToolkit\Support\Config;
 
 final class OptionsServiceProvider extends PackageServiceProvider
 {
@@ -151,7 +152,7 @@ final class OptionsServiceProvider extends PackageServiceProvider
 
     private static function switch(string $key, bool $default): string
     {
-        return (bool) config($key, $default) ? 'ON' : 'OFF';
+        return Config::boolean($key, $default) ? 'ON' : 'OFF';
     }
 
     private static function countOf(string $key): string

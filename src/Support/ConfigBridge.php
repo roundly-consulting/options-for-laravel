@@ -6,6 +6,7 @@ namespace RoundlyConsulting\Options\Support;
 
 use RoundlyConsulting\Options\OptionInterface;
 use RoundlyConsulting\Options\OptionsManager;
+use RoundlyConsulting\PackageToolkit\Support\Config;
 
 /**
  * Bridges DB-backed options onto the Laravel config repository.
@@ -97,7 +98,7 @@ final class ConfigBridge
      */
     public function syncOptionKey(string $optionKey): void
     {
-        if (! config('options.config_overrides_live', false)) {
+        if (! Config::boolean('options.config_overrides_live', false)) {
             return;
         }
 
