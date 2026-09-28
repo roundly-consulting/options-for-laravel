@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace RoundlyConsulting\Options;
 
 use Carbon\CarbonInterface;
-use Closure;
-use Illuminate\Contracts\Database\Eloquent\CastsAttributes;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -70,33 +68,6 @@ class Option extends Model
         }
 
         return $query->whereMorphedTo('owner', $owner);
-    }
-
-    /**
-     * Temporarily apply a cast to the `value` attribute for the duration of the callback.
-     *
-     * @param  CastsAttributes<mixed, mixed>|string  $cast
-     */
-    public function whileCastingValueAs(string|CastsAttributes $cast, Closure $callback): mixed
-    {
-        $this->mergeCasts(['value' => $cast]);
-
-        try {
-            return $callback();
-        } finally {
-            unset($this->casts['value']);
-        }
-    }
-
-    /**
-     * @param  CastsAttributes<mixed, mixed>|string  $cast
-     */
-    public function castValueAs(string|CastsAttributes $cast): mixed
-    {
-        return $this->whileCastingValueAs(
-            cast: $cast,
-            callback: fn (): mixed => $this->castAttribute('value', $this->attributes['value'] ?? null),
-        );
     }
 
     protected static function newFactory(): OptionFactory

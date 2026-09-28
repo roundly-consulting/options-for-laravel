@@ -174,11 +174,10 @@ class OptionsManager
             return $this->get($option, $owner);
         }
 
-        $value = $callback();
+        $this->set($option, $callback(), $owner);
 
-        $this->set($option, $value, $owner);
-
-        return $value;
+        // What was stored, cast — the same type every later call returns.
+        return $this->get($option, $owner);
     }
 
     /**

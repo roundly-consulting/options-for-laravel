@@ -2,10 +2,12 @@
 
 declare(strict_types=1);
 
+use Illuminate\Support\Facades\Cache as CacheFacade;
 use Illuminate\Support\Facades\DB;
 use RoundlyConsulting\Options\Facades\Options;
 use RoundlyConsulting\Options\Support\Cache;
 use RoundlyConsulting\Options\Support\OptionStore;
+use RoundlyConsulting\Options\Support\StoredValue;
 use RoundlyConsulting\Options\Tests\Options\ThemeOption;
 
 beforeEach(function (): void {
@@ -81,7 +83,7 @@ it('is a no-op for forget and flush when disabled', function (): void {
     config()->set('options.cache.enabled', false);
 
     $store = app(OptionStore::class);
-    $store->put('x', 'y');
+    $store->put('x', new StoredValue(true, 'y'));
     $store->forget('x');
     $store->flush();
 
@@ -99,4 +101,22 @@ it('flushes the persistent store through the manager', function (): void {
     expect(DB::getQueryLog())->not->toHaveCount(0);
 
     DB::disableQueryLog();
+});
+
+it('re-reads an entry that is not a stored-value payload', function (): void {
+    Options::set(ThemeOption::class, 'dark');
+    Cache::getInstance()->flush();
+
+    // A foreign payload under the option's key: an older layout, a hand edit.
+    CacheFacade::tags('options')->put('options:'.OptionStore::fingerprint('theme'), 'light', 60);
+
+    expect(Options::get(ThemeOption::class))->toBe('dark');
+});
+
+it('accepts only a stored-value cache payload', function (): void {
+    expect(StoredValue::fromCache('dark'))->toBeNull()
+        ->and(StoredValue::fromCache(['exists' => 'yes']))->toBeNull()
+        ->and(StoredValue::fromCache(['exists' => true, 'raw' => 5]))->toBeNull()
+        ->and(StoredValue::fromCache(['exists' => true, 'raw' => null]))->toEqual(new StoredValue(true))
+        ->and(StoredValue::fromCache(['exists' => false, 'raw' => 'x']))->toEqual(StoredValue::missing());
 });

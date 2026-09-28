@@ -9,6 +9,8 @@ use RoundlyConsulting\Options\Events\OptionSet;
 use RoundlyConsulting\Options\Facades\Options;
 use RoundlyConsulting\Options\Support\Cache;
 use RoundlyConsulting\Options\Tests\Models\User;
+use RoundlyConsulting\Options\Tests\Options\Status;
+use RoundlyConsulting\Options\Tests\Options\StatusOption;
 use RoundlyConsulting\Options\Tests\Options\ThemeOption;
 
 beforeEach(fn () => Cache::getInstance()->flush());
@@ -24,6 +26,14 @@ it('dispatches OptionSet on write', function (): void {
             && $event->value === 'dark'
             && $event->owner === null,
     );
+});
+
+it('carries the cast value on OptionSet, as get() returns it', function (): void {
+    Event::fake([OptionSet::class]);
+
+    Options::set(StatusOption::class, 'active');
+
+    Event::assertDispatched(OptionSet::class, fn (OptionSet $event): bool => $event->value === Status::Active);
 });
 
 it('dispatches OptionForgotten on forget', function (): void {

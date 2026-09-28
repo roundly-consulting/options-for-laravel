@@ -19,6 +19,8 @@ use RoundlyConsulting\Options\Support\Cache;
 use RoundlyConsulting\Options\Support\OptionAuthorizer;
 use RoundlyConsulting\Options\Support\OptionModel;
 use RoundlyConsulting\Options\Support\OptionStore;
+use RoundlyConsulting\Options\Support\StoredValue;
+use RoundlyConsulting\Options\Support\ValueCaster;
 
 /**
  * A setting. Extend it and override the hooks (`key`, `default`, `castAs`,
@@ -120,19 +122,7 @@ abstract class BaseOption implements OptionInterface
     {
         $this->guardRead();
 
-        $cache = Cache::getInstance();
-        $fingerprint = $this->fingerprint();
-
-        if ($cache->has($fingerprint)) {
-            $value = $cache->get($fingerprint);
-        } else {
-            $value = $this->store()->remember(
-                $fingerprint,
-                fn (): mixed => $this->retrieveValueFromDatabase(),
-            );
-
-            $cache->put($fingerprint, $value);
-        }
+        $value = $this->hydrate($this->storedValue());
 
         $this->dispatchResolved($value);
 
@@ -219,7 +209,7 @@ abstract class BaseOption implements OptionInterface
 
         $this->validate($value);
 
-        $cast = $this->resolveCast();
+        $stored = new StoredValue(true, ValueCaster::serialize($this->castingModel(), 'value', $this->resolveCast(), $value));
 
         $option = $this->getModelQuery()
             ->forOwner($this->owner)
@@ -229,16 +219,16 @@ abstract class BaseOption implements OptionInterface
             $option->owner()->associate($this->owner);
         }
 
-        $option->whileCastingValueAs($cast, function () use ($option, $value): void {
-            $option->value = $value;
-            $option->save();
-        });
+        $option->value = $stored->raw;
+        $option->save();
 
-        Cache::getInstance()->put($this->fingerprint(), $value);
-        $this->store()->put($this->fingerprint(), $value);
+        // Cache what a read of the row returns, so the next get() runs the cast
+        // and yields the same type it would after the cache expires.
+        Cache::getInstance()->put($this->fingerprint(), $stored);
+        $this->store()->put($this->fingerprint(), $stored);
 
         if ($this->eventsEnabled()) {
-            OptionSet::dispatch($this->key(), $value, $this->owner);
+            OptionSet::dispatch($this->key(), $this->hydrate($stored), $this->owner);
         }
     }
 
@@ -315,7 +305,29 @@ abstract class BaseOption implements OptionInterface
         return EncryptedCast::class.':'.$inner;
     }
 
-    protected function retrieveValueFromDatabase(): mixed
+    /**
+     * The scope's stored value: from the in-request memo, else the persistent
+     * cache, else the database.
+     */
+    private function storedValue(): StoredValue
+    {
+        $memo = Cache::getInstance();
+        $fingerprint = $this->fingerprint();
+
+        $memoized = $memo->has($fingerprint) ? $memo->get($fingerprint) : null;
+
+        if ($memoized instanceof StoredValue) {
+            return $memoized;
+        }
+
+        $stored = $this->store()->remember($fingerprint, fn (): StoredValue => $this->readStoredValue());
+
+        $memo->put($fingerprint, $stored);
+
+        return $stored;
+    }
+
+    private function readStoredValue(): StoredValue
     {
         $option = $this->getModelQuery()
             ->forOwner($this->owner)
@@ -323,10 +335,34 @@ abstract class BaseOption implements OptionInterface
             ->first();
 
         if (is_null($option)) {
+            return StoredValue::missing();
+        }
+
+        $raw = $option->getAttributes()['value'] ?? null;
+
+        return new StoredValue(true, is_scalar($raw) ? (string) $raw : null);
+    }
+
+    /**
+     * The cast value for what storage holds; the default when nothing is stored.
+     */
+    private function hydrate(StoredValue $stored): mixed
+    {
+        if (! $stored->exists) {
             return $this->default();
         }
 
-        return $option->castValueAs($this->resolveCast());
+        return ValueCaster::hydrate($this->castingModel(), 'value', $this->resolveCast(), $stored->raw);
+    }
+
+    /**
+     * An unsaved instance of the configured option model to run casts on.
+     */
+    private function castingModel(): Option
+    {
+        $model = OptionModel::class();
+
+        return new $model;
     }
 
     protected function dispatchResolved(mixed $value): void

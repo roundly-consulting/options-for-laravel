@@ -11,8 +11,11 @@ use Illuminate\Contracts\Cache\Store;
 use Illuminate\Support\Facades\Cache as CacheManager;
 
 /**
- * Persistent cache layer for resolved option values, sitting on top of the
- * in-request memo cache. Tag-aware when the underlying store supports tags.
+ * Persistent cache layer for stored option values, sitting on top of the
+ * in-request memo cache. It keeps each scope's raw column value (a
+ * {@see StoredValue}), never the cast value: reads cast on the way out, an
+ * encrypted option stays ciphertext here, and nothing but scalars is
+ * serialized. Tag-aware when the underlying store supports tags.
  */
 final class OptionStore
 {
@@ -32,10 +35,12 @@ final class OptionStore
     }
 
     /**
-     * Resolve the value, caching it persistently when enabled. The closure
-     * provides the fresh value (typically a DB read).
+     * Resolve the stored value, caching it persistently when enabled. The
+     * closure provides the fresh value (a DB read).
+     *
+     * @param  Closure(): StoredValue  $callback
      */
-    public function remember(string $fingerprint, Closure $callback): mixed
+    public function remember(string $fingerprint, Closure $callback): StoredValue
     {
         if (! $this->isEnabled()) {
             return $callback();
@@ -44,8 +49,10 @@ final class OptionStore
         $repository = $this->repository();
         $cacheKey = $this->cacheKey($fingerprint);
 
-        if ($repository->has($cacheKey)) {
-            return $repository->get($cacheKey);
+        $cached = StoredValue::fromCache($repository->get($cacheKey));
+
+        if ($cached !== null) {
+            return $cached;
         }
 
         $value = $callback();
@@ -55,7 +62,7 @@ final class OptionStore
         return $value;
     }
 
-    public function put(string $fingerprint, mixed $value): void
+    public function put(string $fingerprint, StoredValue $value): void
     {
         if (! $this->isEnabled()) {
             return;
@@ -88,17 +95,17 @@ final class OptionStore
         // Non-taggable stores expire by TTL; nothing else to flush safely.
     }
 
-    private function putValue(Repository $repository, string $cacheKey, mixed $value): void
+    private function putValue(Repository $repository, string $cacheKey, StoredValue $value): void
     {
         $ttl = config('options.cache.ttl', 3600);
 
         if ($ttl === null) {
-            $repository->forever($cacheKey, $value);
+            $repository->forever($cacheKey, $value->toCache());
 
             return;
         }
 
-        $repository->put($cacheKey, $value, (int) $ttl);
+        $repository->put($cacheKey, $value->toCache(), (int) $ttl);
     }
 
     private function repository(): Repository
