@@ -108,7 +108,7 @@ it('re-reads an entry that is not a stored-value payload', function (): void {
     app(Cache::class)->flush();
 
     // A foreign payload under the option's key: an older layout, a hand edit.
-    CacheFacade::tags('options')->put('options:'.OptionStore::fingerprint('theme'), 'light', 60);
+    CacheFacade::tags('options')->put('options:'.CacheFacade::get('options:generation').':'.OptionStore::fingerprint('theme'), 'light', 60);
 
     expect(Options::get(ThemeOption::class))->toBe('dark');
 });
@@ -119,4 +119,15 @@ it('accepts only a stored-value cache payload', function (): void {
         ->and(StoredValue::fromCache(['exists' => true, 'raw' => 5]))->toBeNull()
         ->and(StoredValue::fromCache(['exists' => true, 'raw' => null]))->toEqual(new StoredValue(true))
         ->and(StoredValue::fromCache(['exists' => false, 'raw' => 'x']))->toEqual(StoredValue::missing());
+});
+
+it('starts a fresh generation when the generation key is evicted', function (): void {
+    Options::set(ThemeOption::class, 'dark');
+    DB::table('options')->where('key', 'theme')->update(['value' => 'edited']);
+
+    CacheFacade::forget('options:generation');
+    app(Cache::class)->flush();
+
+    expect(Options::get(ThemeOption::class))->toBe('edited')
+        ->and(CacheFacade::get('options:generation'))->toBeString();
 });

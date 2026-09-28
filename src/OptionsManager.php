@@ -355,8 +355,8 @@ class OptionsManager
      */
     public function flushCache(): void
     {
-        app(Cache::class)->flush();
         app(OptionStore::class)->flush();
+        app(Cache::class)->flush();
     }
 
     /**

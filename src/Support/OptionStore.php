@@ -9,6 +9,7 @@ use Illuminate\Cache\TaggableStore;
 use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Contracts\Cache\Store;
 use Illuminate\Support\Facades\Cache as CacheManager;
+use Illuminate\Support\Str;
 
 /**
  * Persistent cache layer for stored option values, sitting on top of the
@@ -92,6 +93,11 @@ final class OptionStore
         $this->repository()->forget($this->cacheKey($fingerprint));
     }
 
+    /**
+     * Empty the option cache on any store: every key embeds the current
+     * generation, so moving to a new one orphans all old entries at once (they
+     * expire by TTL). A taggable store also purges them right away.
+     */
     public function flush(): void
     {
         if (! $this->isEnabled()) {
@@ -100,11 +106,11 @@ final class OptionStore
 
         $repository = $this->baseRepository();
 
+        $this->newGeneration($repository);
+
         if ($this->supportsTags($repository)) {
             $repository->tags([$this->tag()])->flush();
         }
-
-        // Non-taggable stores expire by TTL; nothing else to flush safely.
     }
 
     private function putValue(Repository $repository, string $cacheKey, StoredValue $value): void
@@ -152,7 +158,40 @@ final class OptionStore
 
     private function cacheKey(string $fingerprint): string
     {
-        return $this->prefix().':'.$fingerprint;
+        return $this->prefix().':'.$this->generation().':'.$fingerprint;
+    }
+
+    /**
+     * The generation, read once per request or job (memoised alongside the
+     * values), so a flush in another process is seen from its next one on.
+     */
+    private function generation(): string
+    {
+        return app(Cache::class)->generation(function (): string {
+            $repository = $this->baseRepository();
+            $generation = $repository->get($this->generationKey());
+
+            return is_string($generation) && $generation !== ''
+                ? $generation
+                : $this->newGeneration($repository);
+        });
+    }
+
+    private function newGeneration(Repository $repository): string
+    {
+        // Random rather than incremented: never reuses an older generation after
+        // an eviction, and needs no atomic increment (the database store has none
+        // for a missing key).
+        $generation = Str::random(16);
+
+        $repository->forever($this->generationKey(), $generation);
+
+        return $generation;
+    }
+
+    private function generationKey(): string
+    {
+        return $this->prefix().':generation';
     }
 
     private function prefix(): string

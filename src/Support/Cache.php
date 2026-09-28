@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\Options\Support;
 
+use Closure;
+
 /**
  * @internal the in-request memo of stored option values. Bound `scoped` in the
  * container, so it lives for one request or one queued job: Laravel drops it
@@ -17,6 +19,11 @@ final class Cache
      * @var array<string, mixed>
      */
     private array $cache = [];
+
+    /**
+     * The persistent cache generation this request reads and writes under.
+     */
+    private ?string $generation = null;
 
     public function has(string $key): bool
     {
@@ -40,8 +47,17 @@ final class Cache
         unset($this->cache[$key]);
     }
 
+    /**
+     * @param  Closure(): string  $resolve
+     */
+    public function generation(Closure $resolve): string
+    {
+        return $this->generation ??= $resolve();
+    }
+
     public function flush(): void
     {
         $this->cache = [];
+        $this->generation = null;
     }
 }

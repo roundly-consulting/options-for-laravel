@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Support\Str;
 use RoundlyConsulting\Options\Tests\Models\SwappedOptionTestCase;
 use RoundlyConsulting\Options\Tests\TestCase;
 
@@ -41,3 +42,20 @@ uses(TestCase::class)->in(
 // providers boot, so they run on their own base case in their own directory — Pest binds a
 // test case per directory, not per file.
 uses(SwappedOptionTestCase::class)->in('ModelSwap');
+
+/**
+ * A file cache store in a throwaway directory, so a test can read what really
+ * landed in the persistent cache and apply Laravel's unserialize hardening.
+ *
+ * @param  array<int, class-string>|bool|null  $serializableClasses
+ */
+function useFileOptionCache(array|bool|null $serializableClasses = null): string
+{
+    $directory = sys_get_temp_dir().'/options-cache-'.Str::random(12);
+
+    config()->set('cache.stores.options_file', ['driver' => 'file', 'path' => $directory]);
+    config()->set('cache.serializable_classes', $serializableClasses);
+    config()->set('options.cache.store', 'options_file');
+
+    return $directory;
+}

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\Str;
 use RoundlyConsulting\Options\Facades\Options;
 use RoundlyConsulting\Options\Support\Cache;
 use RoundlyConsulting\Options\Tests\Options\CollectionOption;
@@ -12,23 +11,6 @@ use RoundlyConsulting\Options\Tests\Options\EncryptedIntegerOption;
 use RoundlyConsulting\Options\Tests\Options\SecretOption;
 use RoundlyConsulting\Options\Tests\Options\Status;
 use RoundlyConsulting\Options\Tests\Options\StatusOption;
-
-/**
- * A file cache store in a throwaway directory, so a test can read what really
- * landed in the persistent cache and apply Laravel's unserialize hardening.
- *
- * @param  array<int, class-string>|bool|null  $serializableClasses
- */
-function useFileOptionCache(array|bool|null $serializableClasses = null): string
-{
-    $directory = sys_get_temp_dir().'/options-cache-'.Str::random(12);
-
-    config()->set('cache.stores.options_file', ['driver' => 'file', 'path' => $directory]);
-    config()->set('cache.serializable_classes', $serializableClasses);
-    config()->set('options.cache.store', 'options_file');
-
-    return $directory;
-}
 
 function nextRequest(): void
 {
