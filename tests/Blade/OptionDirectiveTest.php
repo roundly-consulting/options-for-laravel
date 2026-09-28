@@ -8,7 +8,7 @@ use RoundlyConsulting\Options\Support\Cache;
 use RoundlyConsulting\Options\Tests\Options\ThemeOption;
 
 beforeEach(function (): void {
-    Cache::getInstance()->flush();
+    app(Cache::class)->flush();
     Options::register(['theme' => ThemeOption::class]);
 });
 

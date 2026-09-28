@@ -10,7 +10,7 @@ use RoundlyConsulting\Options\Tests\Models\User;
 use RoundlyConsulting\Options\Tests\Options\ThemeOption;
 
 beforeEach(function (): void {
-    Cache::getInstance()->flush();
+    app(Cache::class)->flush();
     Options::register(['theme' => ThemeOption::class]);
 });
 

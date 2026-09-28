@@ -10,7 +10,7 @@ use RoundlyConsulting\Options\Support\Cache;
 use RoundlyConsulting\Options\Tests\Models\User;
 use RoundlyConsulting\Options\Tests\Options\SimpleOption;
 
-beforeEach(fn () => Cache::getInstance()->flush());
+beforeEach(fn () => app(Cache::class)->flush());
 
 it('resolves an option through the manager', function (): void {
     $option = app(OptionsManager::class)->resolve(SimpleOption::class);

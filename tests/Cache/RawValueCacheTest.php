@@ -32,7 +32,7 @@ function useFileOptionCache(array|bool|null $serializableClasses = null): string
 
 function nextRequest(): void
 {
-    Cache::getInstance()->flush();
+    app(Cache::class)->flush();
 }
 
 beforeEach(function (): void {

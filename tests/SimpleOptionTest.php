@@ -9,7 +9,7 @@ use RoundlyConsulting\Options\Support\Cache;
 use RoundlyConsulting\Options\Tests\Models\User;
 use RoundlyConsulting\Options\Tests\Options\SimpleOption;
 
-beforeEach(fn () => Cache::getInstance()->flush());
+beforeEach(fn () => app(Cache::class)->flush());
 
 it('generates key from class name', function () {
     expect(SimpleOption::make())->key()->toBe('SimpleOption');

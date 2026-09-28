@@ -8,7 +8,7 @@ use RoundlyConsulting\Options\Support\Cache;
 use RoundlyConsulting\Options\Tests\Options\AgeOption;
 use RoundlyConsulting\Options\Tests\Options\ThemeOption;
 
-beforeEach(fn () => Cache::getInstance()->flush());
+beforeEach(fn () => app(Cache::class)->flush());
 
 it('accepts a valid value', function (): void {
     AgeOption::make()->set(5);

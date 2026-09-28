@@ -7,7 +7,7 @@ use RoundlyConsulting\Options\Support\Cache;
 use RoundlyConsulting\Options\Tests\Models\User;
 use RoundlyConsulting\Options\Tests\Options\ThemeOption;
 
-beforeEach(fn () => Cache::getInstance()->flush());
+beforeEach(fn () => app(Cache::class)->flush());
 
 it('gets and sets through the fluent leaf', function (): void {
     Options::option(ThemeOption::class)->set('dark');

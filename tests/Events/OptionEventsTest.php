@@ -13,7 +13,7 @@ use RoundlyConsulting\Options\Tests\Options\Status;
 use RoundlyConsulting\Options\Tests\Options\StatusOption;
 use RoundlyConsulting\Options\Tests\Options\ThemeOption;
 
-beforeEach(fn () => Cache::getInstance()->flush());
+beforeEach(fn () => app(Cache::class)->flush());
 
 it('dispatches OptionSet on write', function (): void {
     Event::fake([OptionSet::class]);

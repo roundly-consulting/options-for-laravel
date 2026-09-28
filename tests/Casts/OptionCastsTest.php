@@ -11,7 +11,7 @@ use RoundlyConsulting\Options\Tests\Options\DateOption;
 use RoundlyConsulting\Options\Tests\Options\InstanceCastOption;
 use RoundlyConsulting\Options\Tests\Options\Status;
 
-beforeEach(fn () => Cache::getInstance()->flush());
+beforeEach(fn () => app(Cache::class)->flush());
 
 it('round-trips a date option', function (): void {
     $when = CarbonImmutable::parse('2026-06-20 12:00:00');

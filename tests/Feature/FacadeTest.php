@@ -12,7 +12,7 @@ use RoundlyConsulting\Options\Tests\Models\User;
 use RoundlyConsulting\Options\Tests\Options\PlainInterfaceOption;
 use RoundlyConsulting\Options\Tests\Options\ThemeOption;
 
-beforeEach(fn () => Cache::getInstance()->flush());
+beforeEach(fn () => app(Cache::class)->flush());
 
 it('documents its root, fakes for real and reaches every action', function (): void {
     expect(Options::class)

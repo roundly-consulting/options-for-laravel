@@ -11,7 +11,7 @@ use RoundlyConsulting\Options\Tests\Models\User;
 use RoundlyConsulting\Options\Tests\Options\ThemeOption;
 
 beforeEach(function (): void {
-    Cache::getInstance()->flush();
+    app(Cache::class)->flush();
 });
 
 it('resolves the packaged model by default', function (): void {

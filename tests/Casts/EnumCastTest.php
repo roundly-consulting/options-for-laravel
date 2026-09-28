@@ -11,7 +11,7 @@ use RoundlyConsulting\Options\Tests\Options\PriorityOption;
 use RoundlyConsulting\Options\Tests\Options\Status;
 use RoundlyConsulting\Options\Tests\Options\StatusOption;
 
-beforeEach(fn () => Cache::getInstance()->flush());
+beforeEach(fn () => app(Cache::class)->flush());
 
 it('casts a stored value to its enum', function (): void {
     StatusOption::make()->set(Status::Active);

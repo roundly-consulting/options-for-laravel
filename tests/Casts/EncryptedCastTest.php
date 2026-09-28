@@ -18,7 +18,7 @@ use RoundlyConsulting\Options\Tests\Options\EncryptedIntegerOption;
 use RoundlyConsulting\Options\Tests\Options\SecretOption;
 use RoundlyConsulting\Options\Tests\Options\Status;
 
-beforeEach(fn () => Cache::getInstance()->flush());
+beforeEach(fn () => app(Cache::class)->flush());
 
 it('stores ciphertext at rest and decrypts on read', function (): void {
     SecretOption::make()->set('top-secret');
@@ -130,7 +130,7 @@ it('encrypts an option that casts to an enum via a class-string', function (): v
 
     expect(Crypt::decryptString($stored))->toBe('active');
 
-    Cache::getInstance()->flush();
+    app(Cache::class)->flush();
 
     expect(EncryptedEnumOption::make()->value())->toBe(Status::Active);
 });

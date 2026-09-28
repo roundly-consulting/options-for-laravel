@@ -7,7 +7,7 @@ use RoundlyConsulting\Options\Option;
 use RoundlyConsulting\Options\Support\Cache;
 use RoundlyConsulting\Options\Tests\Options\CollectionOption;
 
-beforeEach(fn () => Cache::getInstance()->flush());
+beforeEach(fn () => app(Cache::class)->flush());
 
 it('has custom key', function () {
     expect(CollectionOption::make())->key()->toBe('custom-key');

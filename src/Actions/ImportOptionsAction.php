@@ -40,7 +40,7 @@ final readonly class ImportOptionsAction
             $count++;
         }
 
-        Cache::getInstance()->flush();
+        app(Cache::class)->flush();
 
         return $count;
     }

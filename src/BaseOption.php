@@ -224,7 +224,7 @@ abstract class BaseOption implements OptionInterface
 
         // Cache what a read of the row returns, so the next get() runs the cast
         // and yields the same type it would after the cache expires.
-        Cache::getInstance()->put($this->fingerprint(), $stored);
+        app(Cache::class)->put($this->fingerprint(), $stored);
         $this->store()->put($this->fingerprint(), $stored);
 
         if ($this->eventsEnabled()) {
@@ -258,7 +258,7 @@ abstract class BaseOption implements OptionInterface
             ->get()
             ->each(fn (Option $option) => $option->delete());
 
-        Cache::getInstance()->forget($this->fingerprint());
+        app(Cache::class)->forget($this->fingerprint());
         $this->store()->forget($this->fingerprint());
 
         if ($this->eventsEnabled()) {
@@ -311,7 +311,7 @@ abstract class BaseOption implements OptionInterface
      */
     private function storedValue(): StoredValue
     {
-        $memo = Cache::getInstance();
+        $memo = app(Cache::class);
         $fingerprint = $this->fingerprint();
 
         $memoized = $memo->has($fingerprint) ? $memo->get($fingerprint) : null;

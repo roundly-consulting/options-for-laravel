@@ -9,7 +9,7 @@ use RoundlyConsulting\Options\Tests\Models\User;
 use RoundlyConsulting\Options\Tests\Options\LocaleOption;
 use RoundlyConsulting\Options\Tests\Options\ThemeOption;
 
-beforeEach(fn () => Cache::getInstance()->flush());
+beforeEach(fn () => app(Cache::class)->flush());
 
 it('reads and writes through the scope object', function (): void {
     $user = User::create();

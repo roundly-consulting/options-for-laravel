@@ -9,7 +9,7 @@ use RoundlyConsulting\Options\Support\Cache;
 use RoundlyConsulting\Options\Tests\Options\ThemeOption;
 
 beforeEach(function (): void {
-    Cache::getInstance()->flush();
+    app(Cache::class)->flush();
     $this->path = storage_path('options-export.json');
     File::delete($this->path);
 });

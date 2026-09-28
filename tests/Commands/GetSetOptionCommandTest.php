@@ -11,7 +11,7 @@ use RoundlyConsulting\Options\Tests\Options\SimpleOption;
 use RoundlyConsulting\Options\Tests\Options\ThemeOption;
 
 beforeEach(function (): void {
-    Cache::getInstance()->flush();
+    app(Cache::class)->flush();
     Options::register(['theme' => ThemeOption::class]);
 });
 
@@ -19,7 +19,7 @@ it('round-trips a global option through the cli', function (): void {
     $this->artisan('options:set', ['option' => 'theme', 'value' => 'dark'])
         ->assertSuccessful();
 
-    Cache::getInstance()->flush();
+    app(Cache::class)->flush();
 
     $this->artisan('options:get', ['option' => 'theme'])
         ->expectsOutput('dark')
@@ -36,7 +36,7 @@ it('round-trips a scoped option through the cli', function (): void {
         '--owner-id' => (string) $user->getKey(),
     ])->assertSuccessful();
 
-    Cache::getInstance()->flush();
+    app(Cache::class)->flush();
 
     $this->artisan('options:get', [
         'option' => ThemeOption::class,

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\Options;
 
+use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\Facades\Event;
 use RoundlyConsulting\Options\Commands\ClearOptionsCacheCommand;
 use RoundlyConsulting\Options\Commands\ExportOptionsCommand;
@@ -16,6 +17,7 @@ use RoundlyConsulting\Options\Commands\SetOptionCommand;
 use RoundlyConsulting\Options\Enums\OptionChangeType;
 use RoundlyConsulting\Options\Events\OptionForgotten;
 use RoundlyConsulting\Options\Events\OptionSet;
+use RoundlyConsulting\Options\Support\Cache;
 use RoundlyConsulting\Options\Support\ConfigBridge;
 use RoundlyConsulting\Options\Support\OptionAuthorizer;
 use RoundlyConsulting\Options\Support\OptionModel;
@@ -72,6 +74,7 @@ final class OptionsServiceProvider extends PackageServiceProvider
 
         $this->app->singleton(OptionsManager::class, fn (): OptionsManager => new OptionsManager);
         $this->app->singleton(OptionStore::class, fn (): OptionStore => new OptionStore);
+        $this->app->scoped(Cache::class, fn (): Cache => new Cache);
         $this->app->singleton(OptionObservers::class, fn ($app): OptionObservers => new OptionObservers($app->make(OptionsManager::class)));
         $this->app->singleton(OptionAuthorizer::class, fn (): OptionAuthorizer => new OptionAuthorizer);
         $this->app->singleton(ConfigBridge::class, fn ($app): ConfigBridge => new ConfigBridge($app->make(OptionsManager::class)));
@@ -92,7 +95,23 @@ final class OptionsServiceProvider extends PackageServiceProvider
         );
 
         $this->registerObserverListeners();
+        $this->resetMemoPerLifecycle();
         $this->bootConfigBridge();
+    }
+
+    /**
+     * The memo is `scoped`, which Laravel already resets between queued jobs; these
+     * listeners also cover workers and Octane setups that do not, so one job or
+     * request never serves another's reads.
+     */
+    private function resetMemoPerLifecycle(): void
+    {
+        Event::listen(
+            [JobProcessing::class, 'Laravel\Octane\Events\RequestReceived'],
+            static function (): void {
+                app()->forgetInstance(Cache::class);
+            },
+        );
     }
 
     private function registerObserverListeners(): void

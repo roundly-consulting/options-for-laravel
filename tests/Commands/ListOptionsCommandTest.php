@@ -10,7 +10,7 @@ use RoundlyConsulting\Options\Tests\Options\FlagOption;
 use RoundlyConsulting\Options\Tests\Options\SimpleOption;
 use RoundlyConsulting\Options\Tests\Options\ThemeOption;
 
-beforeEach(fn () => Cache::getInstance()->flush());
+beforeEach(fn () => app(Cache::class)->flush());
 
 it('warns when nothing is registered', function (): void {
     $exit = Artisan::call('options:list');

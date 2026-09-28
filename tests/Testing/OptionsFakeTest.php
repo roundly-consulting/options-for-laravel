@@ -14,7 +14,7 @@ use RoundlyConsulting\Options\Tests\Options\LocaleOption;
 use RoundlyConsulting\Options\Tests\Options\ThemeOption;
 use RoundlyConsulting\Options\Tests\Settings\AppearanceSettings;
 
-beforeEach(fn () => Cache::getInstance()->flush());
+beforeEach(fn () => app(Cache::class)->flush());
 
 it('does not write to the database', function (): void {
     Options::fake();
