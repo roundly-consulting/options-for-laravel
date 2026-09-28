@@ -22,6 +22,7 @@ use RoundlyConsulting\Options\Support\OptionAuthorizer;
 use RoundlyConsulting\Options\Support\OptionModel;
 use RoundlyConsulting\Options\Support\OptionObservers;
 use RoundlyConsulting\Options\Support\OptionStore;
+use Throwable;
 
 /**
  * The facade root (`Options`), bound as a singleton. Every value operation —
@@ -198,15 +199,30 @@ class OptionsManager
     }
 
     /**
-     * Write several options at once.
+     * Write several options at once, all or nothing: every value is authorized
+     * and validated before the first write, and the writes share a transaction.
      *
      * @param  array<string, mixed>  $values
      */
     public function setMany(array $values, ?Model $owner = null): void
     {
+        $options = [];
+
         foreach ($values as $option => $value) {
-            $this->set($option, $value, $owner);
+            $instance = $this->resolve($option, $owner);
+
+            if ($instance instanceof BaseOption) {
+                $instance->assertWritable($value);
+            }
+
+            $options[] = $instance;
         }
+
+        $this->atomically($options, function () use ($values, $owner): void {
+            foreach ($values as $option => $value) {
+                $this->set($option, $value, $owner);
+            }
+        });
     }
 
     /**
@@ -382,6 +398,30 @@ class OptionsManager
         }
 
         return $instance;
+    }
+
+    /**
+     * Run a batch of writes in one transaction on the option model's connection.
+     *
+     * @param  list<OptionInterface>  $options
+     * @param  Closure(): void  $writes
+     */
+    protected function atomically(array $options, Closure $writes): void
+    {
+        $model = OptionModel::class();
+
+        try {
+            (new $model)->getConnection()->transaction($writes);
+        } catch (Throwable $exception) {
+            // The rows rolled back, but the caches may already hold new values.
+            foreach ($options as $option) {
+                if ($option instanceof BaseOption) {
+                    $option->forgetCachedValue();
+                }
+            }
+
+            throw $exception;
+        }
     }
 
     /**

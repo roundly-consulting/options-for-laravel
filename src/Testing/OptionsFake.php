@@ -11,6 +11,7 @@ use PHPUnit\Framework\Assert;
 use RoundlyConsulting\Options\BaseOption;
 use RoundlyConsulting\Options\DataTransferObjects\OptionPayload;
 use RoundlyConsulting\Options\Enums\OptionChangeType;
+use RoundlyConsulting\Options\OptionInterface;
 use RoundlyConsulting\Options\OptionsManager;
 use RoundlyConsulting\Options\Support\OptionAuthorizer;
 use RoundlyConsulting\Options\Support\OptionObservers;
@@ -172,6 +173,17 @@ final class OptionsFake extends OptionsManager
         $this->imports[] = $payloads;
 
         return count($payloads);
+    }
+
+    /**
+     * No database, so no transaction: the batch was already checked up front.
+     *
+     * @param  list<OptionInterface>  $options
+     * @param  Closure(): void  $writes
+     */
+    protected function atomically(array $options, Closure $writes): void
+    {
+        $writes();
     }
 
     public function flushCache(): void

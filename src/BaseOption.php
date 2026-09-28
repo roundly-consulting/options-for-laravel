@@ -205,9 +205,7 @@ abstract class BaseOption implements OptionInterface
      */
     final public function storeValue(mixed $value): void
     {
-        $this->guardWrite();
-
-        $this->validate($value);
+        $this->assertWritable($value);
 
         $stored = new StoredValue(true, $this->serializeValue($value));
 
@@ -230,6 +228,25 @@ abstract class BaseOption implements OptionInterface
         if ($this->eventsEnabled()) {
             OptionSet::dispatch($this->key(), $this->hydrate($stored), $this->owner);
         }
+    }
+
+    /**
+     * @internal the checks every write runs — authorization, then `rules()` — without writing
+     */
+    final public function assertWritable(mixed $value): void
+    {
+        $this->guardWrite();
+
+        $this->validate($value);
+    }
+
+    /**
+     * @internal drops this scope's memoised and persistently cached value
+     */
+    final public function forgetCachedValue(): void
+    {
+        app(Cache::class)->forget($this->fingerprint());
+        $this->store()->forget($this->fingerprint());
     }
 
     /**
@@ -282,8 +299,7 @@ abstract class BaseOption implements OptionInterface
             ->get()
             ->each(fn (Option $option) => $option->delete());
 
-        app(Cache::class)->forget($this->fingerprint());
-        $this->store()->forget($this->fingerprint());
+        $this->forgetCachedValue();
 
         if ($this->eventsEnabled()) {
             OptionForgotten::dispatch($this->key(), $this->owner);

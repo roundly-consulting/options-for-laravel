@@ -49,7 +49,8 @@ final class PendingGroup
     }
 
     /**
-     * Bulk write. Keys may be the option key OR the option class-string.
+     * Bulk write, all or nothing (see `Options::setMany()`). Keys may be the
+     * option key OR the option class-string.
      *
      * @param  array<string, mixed>  $values
      */
@@ -60,19 +61,23 @@ final class PendingGroup
 
         foreach ($this->group->options() as $class) {
             $option = $this->resolve($class);
-            $byKey[$option->key()] = $option;
-            $byClass[$class] = $option;
+            $byKey[$option->key()] = $option::class;
+            $byClass[$class] = $option::class;
         }
 
-        foreach ($values as $identifier => $value) {
-            $option = $byKey[$identifier] ?? $byClass[$identifier] ?? null;
+        $writes = [];
 
-            if ($option === null) {
+        foreach ($values as $identifier => $value) {
+            $class = $byKey[$identifier] ?? $byClass[$identifier] ?? null;
+
+            if ($class === null) {
                 throw InvalidOptionGroup::unknownKey($this->group::class, $identifier);
             }
 
-            $option->set($value);
+            $writes[$class] = $value;
         }
+
+        $this->manager->setMany($writes, $this->owner);
     }
 
     /**
