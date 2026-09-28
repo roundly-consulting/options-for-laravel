@@ -130,7 +130,10 @@ final class SimpleOption extends BaseOption
 }
 ```
 
-Override any method to customise behaviour:
+Override the hooks to customise it (`key`, `default`, `castAs`, `encrypted`, `rules`,
+`authorizeRead/Write`, `label`/`help`/`section`/`order`). The value operations — `value`, `set`,
+`has`, `forget`, `reset`, `remember` — are final: they run through the `Options` manager, which is
+what keeps an option instance, the facade and the test fake in step.
 
 ```php
 use Illuminate\Contracts\Database\Eloquent\CastsAttributes;
@@ -177,6 +180,38 @@ Options::has(SimpleOption::class);                // is a value stored?
 Options::forget(SimpleOption::class);             // delete (revert to default)
 Options::reset(SimpleOption::class);              // alias of forget()
 Options::remember(SimpleOption::class, fn () => compute());
+
+Options::export();                                // list<OptionPayload>: every stored option
+Options::export($team);                           // one owner's options
+Options::export(globalOnly: true);                // only the global ones
+Options::exportJson($team);                       // the same as a JSON string
+Options::import($json);                           // JSON, decoded rows or OptionPayloads — upsert
+Options::for($team)->export();                    // one scope (for(null) = global only)
+```
+
+Every value operation — the facade, `for()` / `option()` / `key()` / `group()`, an option
+instance (`ThemeOption::for($user)->set('dark')`) and the `HasOptions` trait — goes through the
+same `OptionsManager`, so they behave identically and `Options::fake()` sees them all.
+
+**Without the facade.** Inject the manager — same API — or call the export/import actions:
+
+```php
+use RoundlyConsulting\Options\Actions\ExportOptionsAction;
+use RoundlyConsulting\Options\Actions\ImportOptionsAction;
+use RoundlyConsulting\Options\OptionsManager;
+
+final class CopyTeamSettings
+{
+    public function __construct(private OptionsManager $options) {}
+
+    public function __invoke(Team $from): string
+    {
+        return $this->options->exportJson($from);
+    }
+}
+
+$payloads = app(ExportOptionsAction::class)->execute($team);   // list<OptionPayload>
+app(ImportOptionsAction::class)->execute($payloads);           // int
 ```
 
 ### Fluent API
@@ -249,7 +284,7 @@ final class User extends Authenticatable
     use HasOptions;
 }
 
-$user->option(SimpleOption::class)->value();
+$user->option(SimpleOption::class)->value();   // same as Options::get(SimpleOption::class, $user)
 ```
 
 ### Casts
@@ -459,12 +494,13 @@ Options::flushCache(); // clears the in-request memo and persistent entries
 ### Import / export
 
 ```php
-use RoundlyConsulting\Options\Actions\ExportOptionsAction;
-use RoundlyConsulting\Options\Actions\ImportOptionsAction;
-
-$json = app(ExportOptionsAction::class)->toJson();   // all options
-app(ImportOptionsAction::class)->fromJson($json);    // upsert by scope + key
+$json = Options::exportJson();          // all options (raw stored values; encrypted stay encrypted)
+Options::import($json);                 // upsert by scope + key, returns the count
 ```
+
+Owner ids follow `options.key_type`: an int for bigint owners, a string for uuid/ulid owners. A
+row with only one of `owner_type` / `owner_id` is imported as global. Imports drop the cached
+value of every imported key, so the next read sees the imported value.
 
 ### Blade directive
 
@@ -491,19 +527,31 @@ php artisan options:import {path}
 
 ### Testing
 
-Swap the manager for an in-memory fake so your tests never touch the database:
+`Options::fake()` swaps the manager for an in-memory store: nothing touches the database, and every
+write is recorded — made through the facade, an injected manager, a handle, an option instance or
+the `HasOptions` trait. Authorization and observers still run; events and caches do not.
 
 ```php
 use RoundlyConsulting\Options\Facades\Options;
 
 $fake = Options::fake();
 
-Options::set(ThemeOption::class, 'dark');
+$user->option(ThemeOption::class)->set('dark');
+Options::import($json);
 
-$fake->assertSet(ThemeOption::class, 'dark');
-$fake->assertForgotten(ThemeOption::class);
-$fake->assertNothingSet();
+$fake->assertSet(ThemeOption::class, 'dark', $user);
+$fake->assertImported(fn (array $payloads) => count($payloads) === 3);
+$fake->assertNothingForgotten();
 ```
+
+| Assertion | Opposite |
+|---|---|
+| `assertSet($option, $value = null, ?$owner = null)` | `assertNothingSet()` |
+| `assertForgotten($option, ?$owner = null)` | `assertNothingForgotten()` |
+| `assertImported(?fn (list<OptionPayload>): bool)` | `assertNothingImported()` |
+
+Every assertion also works statically (`Options::assertSet(...)`). `export()` / `exportJson()`
+under the fake read the in-memory store.
 
 The `Option` factory also ships states: `global()`, `forOwner($model)`, `value($v)`,
 `withMeta([...])`.

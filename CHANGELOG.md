@@ -26,6 +26,10 @@ Initial public release.
 - `OptionSet`, `OptionForgotten` and `OptionResolved` events, plus per-option observers via
   `Options::observe()`.
 - In-request memoisation and optional persistent caching with automatic invalidation.
-- JSON import / export and the `make:option`, `make:option-group`, `options:list`, `options:get`,
-  `options:set`, `options:export`, `options:import` and `options:clear-cache` commands.
-- `Options::fake()` with assertions for testing host applications.
+- JSON import / export on the facade — `Options::export()`, `exportJson()`, `import()` and
+  `Options::for($owner)->export()` — and the `make:option`, `make:option-group`, `options:list`,
+  `options:get`, `options:set`, `options:export`, `options:import` and `options:clear-cache`
+  commands.
+- `Options::fake()` — an in-memory store that sees every write (facade, handles, option instances,
+  the `HasOptions` trait, imports) and never touches the database, with `assertSet()`,
+  `assertForgotten()`, `assertImported()` and their `assertNothing*()` opposites.
