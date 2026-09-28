@@ -24,8 +24,8 @@ API, persistent caching, events, validation, and console tooling.
 
 Each option is a small class describing its key, human-readable name, default value, and how
 its value is cast. Options can be global or scoped to any Eloquent model (a user, a team, a
-tenant, …). Resolved values are memoised for the current request and, optionally, cached
-across requests.
+tenant, …). Stored values are memoised for the current request (or queued job) and, optionally,
+cached across requests.
 
 ## Requirements
 
@@ -56,12 +56,14 @@ php artisan vendor:publish --tag="options-config"
 
 ## Configuration
 
-The published `config/options.php` exposes the model, an optional string-key registry,
-persistent caching, and events:
+The published `config/options.php` exposes the model, the owner key type, an optional
+string-key registry, persistent caching, events, groups, access control and the config bridge:
 
 ```php
 return [
     'model' => RoundlyConsulting\Options\Option::class,
+
+    'key_type' => env('OPTIONS_KEY_TYPE', 'bigint'),
 
     'registry' => [
         // 'theme' => App\Options\ThemeOption::class,
@@ -100,12 +102,13 @@ return [
 | Key | Type | Default | Env | Purpose |
 |---|---|---|---|---|
 | `model` | `class-string` | `Option::class` | — | Eloquent model used to persist options. Must extend `RoundlyConsulting\Options\Option`. |
+| `key_type` | `string` | `bigint` | `OPTIONS_KEY_TYPE` | Key type of the polymorphic `owner` column: `bigint`, `uuid` or `ulid` (anything else falls back to `bigint`). Fixed when the migration runs, so set it before publishing the migration. |
 | `registry` | `array<string, class-string>` | `[]` | — | Optional map of string keys to option classes for key-based access. |
 | `cache.enabled` | `bool` | `true` | `OPTIONS_CACHE_ENABLED` | Enable the persistent (cross-request) cache layer. |
 | `cache.store` | `?string` | `null` | `OPTIONS_CACHE_STORE` | Cache store name; `null` uses the default store. |
 | `cache.ttl` | `?int` | `3600` | `OPTIONS_CACHE_TTL` | Cache lifetime in seconds; `null` caches forever. |
 | `cache.prefix` | `string` | `options` | `OPTIONS_CACHE_PREFIX` | Cache key prefix. |
-| `cache.tag` | `string` | `options` | `OPTIONS_CACHE_TAG` | Cache tag used for bulk invalidation (taggable stores only). |
+| `cache.tag` | `string` | `options` | `OPTIONS_CACHE_TAG` | Cache tag, so a taggable store (Redis/Memcached) also purges old entries on a flush. |
 | `events.enabled` | `bool` | `true` | `OPTIONS_EVENTS_ENABLED` | Dispatch `OptionSet`/`OptionForgotten` events. |
 | `events.resolved` | `bool` | `false` | `OPTIONS_EVENTS_RESOLVED` | Also dispatch `OptionResolved` on every read (off by default — it is chatty). |
 | `groups` | `array<string, class-string>` | `[]` | — | Optional map of short keys to `OptionGroup` classes for `Options::group('key')`. |
@@ -113,6 +116,8 @@ return [
 | `authorization.use_gate` | `bool` | `false` | `OPTIONS_AUTHORIZATION_GATE` | Also consult the Gate abilities `option.read`/`option.write` when defined. |
 | `config_overrides` | `array<string, class-string>` | `[]` | — | Map of `config()` keys to options whose stored value overrides config at boot. |
 | `config_overrides_live` | `bool` | `false` | `OPTIONS_CONFIG_OVERRIDES_LIVE` | Re-apply a mapped config key in-process on `set()`/`forget()`. Off by default. |
+
+The `bool` switches accept the usual env spellings: `true`/`false`, `1`/`0`, `on`/`off`, `yes`/`no`.
 
 ## Usage
 
@@ -241,6 +246,11 @@ $all = Options::all();          // global
 $all = Options::for($user)->all();
 ```
 
+`setMany()` is all or nothing: every value is authorized and validated before the first write,
+and the writes share one database transaction. `all()` returns the raw stored strings (an
+encrypted option stays ciphertext); with [access control](#access-control) on, it leaves out
+what the current user may not read.
+
 ### Helpers
 
 `options()` and its alias `setting()` cover the common cases (both are `function_exists`
@@ -289,21 +299,28 @@ $user->option(SimpleOption::class)->value();   // same as Options::get(SimpleOpt
 
 ### Casts
 
-`castAs()` accepts any Laravel cast string, a custom `CastsAttributes`, or one of the package
-casts:
+`castAs()` accepts any Laravel cast string, a custom `CastsAttributes` (class-string or
+instance), or one of the package casts:
 
 ```php
 use RoundlyConsulting\Options\Casts\EnumCast;
 
 public function castAs(): string|CastsAttributes
 {
-    return EnumCast::class.':'.Status::class; // backed-enum cast
+    return EnumCast::class.':'.Status::class; // backed-enum cast (string- or int-backed)
 }
 ```
 
-Set `encrypted()` to `true` to encrypt the value at rest (the serialized value is encrypted
-with Laravel's `encrypt()` and transparently decrypted on read). Encrypted options must
-declare `castAs()` as a string (`'string'`, `'collection'`, or a cast class-string):
+Reads always return the cast type — including right after `set()`, which stores the value the
+way the database would and caches that, not your input. Setting `'active'` on the option above
+returns `Status::Active`; an `integer` option set to `'5'` returns `5`; a `collection` option set
+to an array returns a `Collection`.
+
+Set `encrypted()` to `true` to encrypt the value at rest (the value is serialized through its
+cast, encrypted with Laravel's encrypter, and decrypted and cast back on read, so an encrypted
+`integer` still reads as an `int`). The persistent cache only ever holds the ciphertext.
+Encrypted options must declare `castAs()` as a string (`'integer'`, `'boolean'`, `'collection'`,
+a cast class-string, …) — a cast *instance* throws `EncryptionNotSupported`:
 
 ```php
 public function encrypted(): bool
@@ -330,7 +347,7 @@ Invalid values throw `Illuminate\Validation\ValidationException`.
 
 `OptionSet` and `OptionForgotten` fire on writes/deletes; `OptionResolved` fires on reads
 when `options.events.resolved` is enabled. Each event carries the option `key`, the
-`?Model $owner`, and (for set/resolved) the value.
+`?Model $owner`, and (for set/resolved) the cast value — the same value `get()` returns.
 
 ```php
 use RoundlyConsulting\Options\Events\OptionSet;
@@ -371,7 +388,9 @@ Options::group(AppearanceSettings::class)->for($user)->all();
 // (label, help, section, order, type, encrypted, current, default):
 $page = Options::group(AppearanceSettings::class)->for($user)->definition();
 
-// Bulk write by option key or class-string (validated, cast, events + observers fire):
+// Bulk write by option key or class-string — all or nothing, like setMany(): every value is
+// authorized and validated before the first write, and the writes share a transaction
+// (then cast, events + observers fire):
 Options::group(AppearanceSettings::class)->for($user)->set([
     'theme'           => 'dark',
     LocaleOption::class => 'sk',
@@ -420,12 +439,18 @@ Options::withoutAuthorization(fn () => Options::set(MaintenanceModeOption::class
 ```
 
 Both `authorizeRead()` and `authorizeWrite()` default to `true`. Reads (`get`, `has`, `many`,
-`all`, the fluent API, helpers, and the `@option` directive) and writes (`set`, `setMany`,
-`remember`, `forget`, `reset`) are enforced through one seam, so all access paths respect the
-rules. With `authorization.use_gate` on, the Gate abilities `option.read`/`option.write` are
-also consulted **when defined** (they receive the option instance and owner). Console commands
-bypass authorization by default; pass `--as=<userKey>` to `options:get`/`options:set` to run
-under a specific user's rules.
+the fluent API, helpers, and the `@option` directive) and writes (`set`, `setMany`, group
+`set`, `remember`, `forget`, `reset`) are enforced through one seam, so all access paths respect
+the rules. `all()` does not throw: it leaves out every option the current user may not read —
+and, since it can only check an option it knows, every stored key that is not in the
+[string-key registry](#string-key-registry). With `authorization.use_gate` on, the Gate
+abilities `option.read`/`option.write` are also consulted **when defined** (they receive the
+option instance and owner).
+
+System code bypasses authorization: the [config bridge](#config-bridge) reads its options
+unguarded (it runs at boot, before any user exists), and so do the console commands —
+`options:list`, `options:get` and `options:set`. Pass `--as=<userKey>` to `options:get` /
+`options:set` to run under a specific user's rules instead.
 
 ### Config bridge
 
@@ -450,7 +475,8 @@ Options::applyConfigOverrides(); // re-read every mapped option into config() no
 ```
 
 With `options.config_overrides_live` enabled, `set()`/`forget()` re-apply (or revert) the
-mapped config key in the current process.
+mapped config key in the current process. The bridge reads its options without
+[access control](#access-control), so an option guarded by `authorizeRead()` still reaches config.
 
 > **Boot-order caveat:** only code that reads a mapped config key *after* the package boots
 > sees the override. Config consumed earlier in the bootstrap — or read from a `config:cache`d
@@ -482,14 +508,29 @@ Observers do not fire on reads. The in-memory test fake fires them directly, so
 
 ### Caching
 
-Resolved values are memoised in-request and, when `options.cache.enabled` is true, stored in
-a persistent Illuminate cache. Writes and deletes invalidate both caches automatically. With
-a taggable store (Redis/Memcached) `flushCache()` purges everything at once; with a
-non-taggable store entries expire by TTL.
+Two layers sit in front of the database:
+
+- **An in-request memo.** It lives for one request or one queued job — it is bound `scoped` in
+  the container and also dropped when a queue job starts or Octane receives a request — so a
+  long-running worker never keeps serving a value another process has since changed.
+- **A persistent cache** (when `options.cache.enabled` is true) in any Illuminate cache store.
+  Writes update it and deletes drop the entry, so every process sees a change from its next
+  request or job on.
+
+Both hold the raw stored string, never the cast value: an encrypted option stays ciphertext in
+the cache, and nothing but scalars is serialized, so Laravel's unserialize hardening
+(`cache.serializable_classes`) cannot turn a cached `Collection` or `Carbon` into
+`__PHP_Incomplete_Class`. Each read casts the raw value.
 
 ```php
-Options::flushCache(); // clears the in-request memo and persistent entries
+Options::flushCache(); // clears the in-request memo and the persistent entries
 ```
+
+`flushCache()` and `php artisan options:clear-cache` work on every store: each cache key embeds a
+generation token, and a flush moves to a new one, so no old entry is read again — also by other
+processes, from their next request on. A taggable store (Redis/Memcached) also deletes the old
+entries at once; on any other store (file, database) they expire by `cache.ttl`, and with a
+`null` TTL they stay until the store evicts them.
 
 ### Import / export
 
@@ -501,6 +542,11 @@ Options::import($json);                 // upsert by scope + key, returns the co
 Owner ids follow `options.key_type`: an int for bigint owners, a string for uuid/ulid owners. A
 row with only one of `owner_type` / `owner_id` is imported as global. Imports drop the cached
 value of every imported key, so the next read sees the imported value.
+
+The table holds at most one row per option and scope (a unique index over the scope and key),
+so two requests writing a new option at the same moment cannot store it twice: the second
+write updates the first one's row. A forgotten option's (soft-deleted) row is reused by the
+next `set()` or import.
 
 ### Blade directive
 
@@ -523,13 +569,19 @@ php artisan options:export [--owner= --owner-id= --path=storage/options.json]
 php artisan options:import {path}
 ```
 
-`{option}` is a registered key or an option class-string.
+`{option}` is a registered key or an option class-string. `make:option-group` writes each
+`--options` class fully qualified (`\App\Options\ThemeOption::class`), so it resolves from the
+group's own namespace. The commands bypass [access control](#access-control).
 
 ### Testing
 
 `Options::fake()` swaps the manager for an in-memory store: nothing touches the database, and every
 write is recorded — made through the facade, an injected manager, a handle, an option instance or
-the `HasOptions` trait. Authorization and observers still run; events and caches do not.
+the `HasOptions` trait. It behaves like the real manager where a test would notice: writes are
+validated against `rules()` (an invalid one throws and is not recorded), reads return the cast
+type, `setMany()` / group writes validate the whole batch first, and keys you registered with
+`Options::register()` before calling `fake()` still resolve. Authorization and observers still
+run; events and caches do not.
 
 ```php
 use RoundlyConsulting\Options\Facades\Options;
@@ -550,8 +602,9 @@ $fake->assertNothingForgotten();
 | `assertForgotten($option, ?$owner = null)` | `assertNothingForgotten()` |
 | `assertImported(?fn (list<OptionPayload>): bool)` | `assertNothingImported()` |
 
-Every assertion also works statically (`Options::assertSet(...)`). `export()` / `exportJson()`
-under the fake read the in-memory store.
+Every assertion also works statically (`Options::assertSet(...)`). `assertSet()` compares the
+value as you passed it. `export()` / `exportJson()` under the fake read the in-memory store,
+which holds what the database would — raw strings, ciphertext for an encrypted option.
 
 The `Option` factory also ships states: `global()`, `forOwner($model)`, `value($v)`,
 `withMeta([...])`.
