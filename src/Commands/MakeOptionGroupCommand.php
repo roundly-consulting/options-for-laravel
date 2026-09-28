@@ -47,19 +47,21 @@ final class MakeOptionGroupCommand extends GeneratorCommand
     {
         $options = $this->option('options');
 
+        $example = '            // \\App\\Options\\ExampleOption::class,';
+
         if (! is_string($options) || $options === '') {
-            return '            // App\Options\ExampleOption::class,';
+            return $example;
         }
 
+        // Fully qualified: the group lives in its own namespace, where a bare
+        // `App\Options\X` would resolve relative to it.
         $entries = collect(explode(',', $options))
-            ->map(fn (string $option): string => trim($option))
+            ->map(fn (string $option): string => trim($option, " \t\n\r\0\x0B\\"))
             ->filter(fn (string $option): bool => $option !== '')
-            ->map(fn (string $option): string => '            '.$option.'::class,')
+            ->map(fn (string $option): string => '            \\'.$option.'::class,')
             ->implode(PHP_EOL);
 
-        return $entries === ''
-            ? '            // App\Options\ExampleOption::class,'
-            : $entries;
+        return $entries === '' ? $example : $entries;
     }
 
     /**
