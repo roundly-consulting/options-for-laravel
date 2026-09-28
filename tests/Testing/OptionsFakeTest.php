@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\AssertionFailedError;
 use RoundlyConsulting\Options\DataTransferObjects\OptionPayload;
 use RoundlyConsulting\Options\Facades\Options;
@@ -10,7 +13,13 @@ use RoundlyConsulting\Options\OptionsManager;
 use RoundlyConsulting\Options\Support\Cache;
 use RoundlyConsulting\Options\Testing\OptionsFake;
 use RoundlyConsulting\Options\Tests\Models\User;
+use RoundlyConsulting\Options\Tests\Options\AgeOption;
+use RoundlyConsulting\Options\Tests\Options\CollectionOption;
+use RoundlyConsulting\Options\Tests\Options\EncryptedIntegerOption;
 use RoundlyConsulting\Options\Tests\Options\LocaleOption;
+use RoundlyConsulting\Options\Tests\Options\SecretOption;
+use RoundlyConsulting\Options\Tests\Options\Status;
+use RoundlyConsulting\Options\Tests\Options\StatusOption;
 use RoundlyConsulting\Options\Tests\Options\ThemeOption;
 use RoundlyConsulting\Options\Tests\Settings\AppearanceSettings;
 
@@ -256,4 +265,70 @@ it('is the manager subtype the container resolves', function (): void {
     expect($fake)->toBeInstanceOf(OptionsFake::class)
         ->and(app(OptionsManager::class))->toBe($fake)
         ->and(options())->toBe($fake);
+});
+
+it('validates writes like the real manager', function (): void {
+    $fake = Options::fake();
+
+    expect(fn () => Options::set(AgeOption::class, 'abc'))->toThrow(ValidationException::class)
+        ->and(Options::has(AgeOption::class))->toBeFalse();
+
+    $fake->assertNothingSet();
+});
+
+it('returns the cast value like the real manager', function (): void {
+    Options::fake();
+
+    Options::set(StatusOption::class, 'active');
+    Options::set(CollectionOption::class, ['email' => false]);
+    Options::set(EncryptedIntegerOption::class, '5');
+
+    expect(Options::get(StatusOption::class))->toBe(Status::Active)
+        ->and(Options::get(CollectionOption::class))->toBeInstanceOf(Collection::class)
+        ->and(Options::get(CollectionOption::class)?->get('email'))->toBeFalse()
+        ->and(Options::get(EncryptedIntegerOption::class))->toBe(5);
+});
+
+it('exports what the database would hold, ciphertext included', function (): void {
+    Options::fake();
+
+    Options::set(SecretOption::class, 'sk_live_TOPSECRET');
+
+    $exported = Options::export()[0]->value;
+
+    expect($exported)->not->toContain('TOPSECRET')
+        ->and(Crypt::decryptString($exported))->toBe('sk_live_TOPSECRET')
+        ->and(Options::get(SecretOption::class))->toBe('sk_live_TOPSECRET');
+});
+
+it('keeps the keys registered before it was installed', function (): void {
+    Options::register(['theme' => ThemeOption::class]);
+
+    Options::fake();
+    Options::set('theme', 'dark');
+
+    expect(Options::get('theme'))->toBe('dark')
+        ->and(Options::registered())->toHaveKey('theme');
+});
+
+it('observes keys registered after it was installed', function (): void {
+    Options::fake();
+    Options::register(['theme' => ThemeOption::class]);
+
+    $seen = [];
+    Options::observe('theme', function (mixed $value) use (&$seen): void {
+        $seen[] = $value;
+    });
+
+    Options::set('theme', 'dark');
+
+    expect($seen)->toBe(['dark']);
+});
+
+it('returns an imported value it cannot cast as it was given', function (): void {
+    Options::fake();
+
+    Options::import([['key' => 'status', 'value' => ['not' => 'a column value']]]);
+
+    expect(Options::get(StatusOption::class))->toBe(['not' => 'a column value']);
 });

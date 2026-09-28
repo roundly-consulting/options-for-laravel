@@ -31,8 +31,6 @@ final class OptionObservers
      */
     private array $byKey = [];
 
-    public function __construct(private readonly OptionsManager $manager) {}
-
     /**
      * Register a callback fired when the given option changes.
      *
@@ -45,7 +43,7 @@ final class OptionObservers
             throw InvalidOptionObserver::for($callback);
         }
 
-        $class = $this->manager->resolveClass($option);
+        $class = $this->manager()->resolveClass($option);
         $key = $class::for(null)->key();
 
         $this->byClass[$class][] = $callback;
@@ -59,7 +57,7 @@ final class OptionObservers
      */
     public function forget(string $option): void
     {
-        $class = $this->manager->resolveClass($option);
+        $class = $this->manager()->resolveClass($option);
         $key = $class::for(null)->key();
 
         unset($this->byClass[$class], $this->byKey[$key]);
@@ -113,7 +111,7 @@ final class OptionObservers
             }
         }
 
-        return $this->manager->resolveClass($key);
+        return $this->manager()->resolveClass($key);
     }
 
     private function invoke(Closure|string $callback, mixed $value, ?Model $owner, OptionChange $change): void
@@ -127,6 +125,14 @@ final class OptionObservers
         $instance = app()->make($callback);
 
         $instance($value, $owner, $change);
+    }
+
+    /**
+     * Resolved per call, so keys registered on `Options::fake()` resolve too.
+     */
+    private function manager(): OptionsManager
+    {
+        return app(OptionsManager::class);
     }
 
     private function isInvokable(string $callback): bool

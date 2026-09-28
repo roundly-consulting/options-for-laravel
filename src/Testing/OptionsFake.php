@@ -20,12 +20,15 @@ use RoundlyConsulting\Options\Support\OptionObservers;
  * Every write — the facade, an injected manager, `for()` / `option()` / `key()` /
  * `group()` handles, an option instance (`ThemeOption::for($user)->set()`) and
  * the `HasOptions` trait — lands here, is recorded and fires the registered
- * observers. Authorization still applies; events and caches do not.
+ * observers. Writes are validated and stored in their raw column form, so reads
+ * return the cast type the real manager would and a write it would reject fails
+ * here too. Authorization still applies; events and caches do not.
  */
 final class OptionsFake extends OptionsManager
 {
     /**
-     * Values per scope (`global` or `morphClass:key`), keyed by option key.
+     * Stored values per scope (`global` or `morphClass:key`), keyed by option
+     * key: the raw column string, as the database would hold it.
      *
      * @var array<string, array<string, mixed>>
      */
@@ -53,17 +56,34 @@ final class OptionsFake extends OptionsManager
      */
     private array $imports = [];
 
+    /**
+     * A fake that keeps the keys registered on the manager it replaces — a
+     * provider's `Options::register()` ran before the test installed it.
+     */
+    public static function replacing(OptionsManager $manager): self
+    {
+        $fake = app(self::class);
+        $fake->register($manager->registered());
+
+        return $fake;
+    }
+
     public function get(string $option, ?Model $owner = null): mixed
     {
         $instance = $this->resolve($option, $owner);
         $this->guardRead($instance, $owner);
         $key = $instance->key();
 
-        if (array_key_exists($key, $this->store[$this->scope($owner)] ?? [])) {
-            return $this->store[$this->scope($owner)][$key];
+        if (! array_key_exists($key, $this->store[$this->scope($owner)] ?? [])) {
+            return $instance->default();
         }
 
-        return $instance->default();
+        $stored = $this->store[$this->scope($owner)][$key];
+
+        // Imported rows can carry anything; only a column-shaped value is cast.
+        return $instance instanceof BaseOption && (is_string($stored) || $stored === null)
+            ? $instance->castStoredValue($stored)
+            : $stored;
     }
 
     public function set(string $option, mixed $value, ?Model $owner = null): void
@@ -71,10 +91,18 @@ final class OptionsFake extends OptionsManager
         $instance = $this->resolve($option, $owner);
         $this->guardWrite($instance, $owner);
 
-        $this->put($instance->key(), $value, $owner?->getMorphClass(), $owner?->getKey());
+        [$stored, $cast] = [$value, $value];
+
+        if ($instance instanceof BaseOption) {
+            $instance->validateValue($value);
+            $stored = $instance->serializeValue($value);
+            $cast = $instance->castStoredValue($stored);
+        }
+
+        $this->put($instance->key(), $stored, $owner?->getMorphClass(), $owner?->getKey());
         $this->sets[] = ['key' => $instance->key(), 'value' => $value, 'owner' => $owner];
 
-        app(OptionObservers::class)->dispatch($instance->key(), OptionChangeType::Set, $value, $owner);
+        app(OptionObservers::class)->dispatch($instance->key(), OptionChangeType::Set, $cast, $owner);
     }
 
     public function has(string $option, ?Model $owner = null): bool

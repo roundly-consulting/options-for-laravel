@@ -67,7 +67,7 @@ final class Options extends Facade
      */
     public static function fake(): OptionsFake
     {
-        $fake = app(OptionsFake::class);
+        $fake = OptionsFake::replacing(app(OptionsManager::class));
         self::swap($fake);
 
         return $fake;

@@ -209,7 +209,7 @@ abstract class BaseOption implements OptionInterface
 
         $this->validate($value);
 
-        $stored = new StoredValue(true, ValueCaster::serialize($this->castingModel(), 'value', $this->resolveCast(), $value));
+        $stored = new StoredValue(true, $this->serializeValue($value));
 
         $option = $this->getModelQuery()
             ->forOwner($this->owner)
@@ -230,6 +230,30 @@ abstract class BaseOption implements OptionInterface
         if ($this->eventsEnabled()) {
             OptionSet::dispatch($this->key(), $this->hydrate($stored), $this->owner);
         }
+    }
+
+    /**
+     * @internal runs `rules()` against a value, as every write does; throws a ValidationException
+     */
+    final public function validateValue(mixed $value): void
+    {
+        $this->validate($value);
+    }
+
+    /**
+     * @internal the raw column string a write stores for the value (ciphertext when encrypted)
+     */
+    final public function serializeValue(mixed $value): ?string
+    {
+        return ValueCaster::serialize($this->castingModel(), 'value', $this->resolveCast(), $value);
+    }
+
+    /**
+     * @internal the cast value a read returns for a raw column string
+     */
+    final public function castStoredValue(?string $raw): mixed
+    {
+        return $this->hydrate(new StoredValue(true, $raw));
     }
 
     /**

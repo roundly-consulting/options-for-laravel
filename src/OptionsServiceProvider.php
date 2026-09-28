@@ -75,7 +75,7 @@ final class OptionsServiceProvider extends PackageServiceProvider
         $this->app->singleton(OptionsManager::class, fn (): OptionsManager => new OptionsManager);
         $this->app->singleton(OptionStore::class, fn (): OptionStore => new OptionStore);
         $this->app->scoped(Cache::class, fn (): Cache => new Cache);
-        $this->app->singleton(OptionObservers::class, fn ($app): OptionObservers => new OptionObservers($app->make(OptionsManager::class)));
+        $this->app->singleton(OptionObservers::class, fn (): OptionObservers => new OptionObservers);
         $this->app->singleton(OptionAuthorizer::class, fn (): OptionAuthorizer => new OptionAuthorizer);
         $this->app->singleton(ConfigBridge::class, fn (): ConfigBridge => new ConfigBridge);
     }
