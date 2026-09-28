@@ -20,6 +20,7 @@ uses(TestCase::class)->in(
     'RegistryTest.php',
     'ServiceProviderTest.php',
     'SimpleOptionTest.php',
+    'UniqueRowsTest.php',
     'Actions',
     'Authorization',
     'Blade',

@@ -26,14 +26,18 @@ final readonly class ImportOptionsAction
 
         $count = 0;
 
+        $deletedAt = (new $model)->getDeletedAtColumn();
+
         foreach ($payloads as $payload) {
-            $model::query()->updateOrCreate(
+            // withTrashed: a forgotten row is revived rather than duplicated,
+            // which the unique (owner_scope, key) index would refuse anyway.
+            $model::query()->withTrashed()->updateOrCreate(
                 [
                     'key' => $payload->key,
                     'owner_type' => $payload->ownerType,
                     'owner_id' => $payload->ownerId,
                 ],
-                ['value' => $payload->value],
+                ['value' => $payload->value, $deletedAt => null],
             );
 
             $this->store->forget(OptionStore::fingerprint($payload->key, $payload->ownerType, $payload->ownerId));

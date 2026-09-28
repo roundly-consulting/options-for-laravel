@@ -9,6 +9,7 @@ use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Database\Eloquent\CastsAttributes;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Validator;
 use RoundlyConsulting\Options\Casts\EncryptedCast;
 use RoundlyConsulting\Options\Events\OptionForgotten;
@@ -209,16 +210,7 @@ abstract class BaseOption implements OptionInterface
 
         $stored = new StoredValue(true, $this->serializeValue($value));
 
-        $option = $this->getModelQuery()
-            ->forOwner($this->owner)
-            ->firstOrNew(['key' => $this->key()]);
-
-        if (! $option->exists && ! is_null($this->owner)) {
-            $option->owner()->associate($this->owner);
-        }
-
-        $option->value = $stored->raw;
-        $option->save();
+        $this->persist($stored->raw);
 
         // Cache what a read of the row returns, so the next get() runs the cast
         // and yields the same type it would after the cache expires.
@@ -343,6 +335,58 @@ abstract class BaseOption implements OptionInterface
         }
 
         return EncryptedCast::class.':'.$inner;
+    }
+
+    /**
+     * Upsert this scope's row. The unique (owner_scope, key) index settles a
+     * race between two first writes: the loser's insert fails and it updates
+     * the winner's row instead. A forgotten (soft-deleted) row is reused.
+     */
+    private function persist(?string $raw): void
+    {
+        try {
+            $this->saveRow($this->storedRow() ?? $this->newRow(), $raw);
+        } catch (UniqueConstraintViolationException $exception) {
+            $this->saveRow($this->storedRow() ?? throw $exception, $raw);
+        }
+    }
+
+    private function saveRow(Option $option, ?string $raw): void
+    {
+        $option->value = $raw;
+        $option->{$option->getDeletedAtColumn()} = null;
+
+        if ($option->exists) {
+            $option->save();
+
+            return;
+        }
+
+        // Insert under a savepoint, so a lost race leaves an enclosing
+        // transaction usable (Postgres aborts it on any failed statement).
+        $option->getConnection()->transaction(fn (): bool => $option->save());
+    }
+
+    private function storedRow(): ?Option
+    {
+        return $this->getModelQuery()
+            ->withTrashed()
+            ->forOwner($this->owner)
+            ->where('key', $this->key())
+            ->first();
+    }
+
+    private function newRow(): Option
+    {
+        $model = OptionModel::class();
+        $option = new $model;
+        $option->key = $this->key();
+
+        if (! is_null($this->owner)) {
+            $option->owner()->associate($this->owner);
+        }
+
+        return $option;
     }
 
     /**

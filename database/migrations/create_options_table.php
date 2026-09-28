@@ -16,6 +16,9 @@ return new class extends Migration
         Schema::create('options', function (Blueprint $table) use ($keyType): void {
             $table->id();
             $table->morphKey('owner', $keyType, nullable: true);
+            // `global` or a hash of owner type + id, filled by the model. The unique
+            // index below needs it: a global option's NULL owner columns never collide.
+            $table->string('owner_scope', 32);
             $table->string('key')->index();
             $table->text('value')->nullable();
             $table->jsonb('meta')->nullable();
@@ -23,6 +26,7 @@ return new class extends Migration
             $table->softDeletes();
 
             $table->index(['owner_type', 'owner_id', 'key']);
+            $table->unique(['owner_scope', 'key']);
         });
     }
 };
