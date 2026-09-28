@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Gate;
 use RoundlyConsulting\Options\Exceptions\UnauthorizedOption;
 use RoundlyConsulting\Options\Facades\Options;
+use RoundlyConsulting\Options\Option;
 use RoundlyConsulting\Options\Tests\Models\User;
 use RoundlyConsulting\Options\Tests\Options\AdminOnlyOption;
 use RoundlyConsulting\Options\Tests\Options\ThemeOption;
@@ -152,4 +153,40 @@ it('respects enforcement through the fake when enabled', function (): void {
     $fake = Options::fake();
 
     expect(fn () => $fake->get(AdminOnlyOption::class))->toThrow(UnauthorizedOption::class);
+});
+
+it('leaves out of all() what the current user may not read', function (): void {
+    Options::withoutAuthorization(function (): void {
+        Options::set(AdminOnlyOption::class, 'secret-admin-value');
+        Options::set(ThemeOption::class, 'dark');
+    });
+    // An option stored under a key no registered class answers for.
+    Option::query()->create(['key' => 'unknown-key', 'value' => 'orphan']);
+    Options::register(['admin' => AdminOnlyOption::class, 'theme' => ThemeOption::class]);
+
+    config()->set('options.authorization.enabled', true);
+
+    expect(Options::all()->all())->toBe(['theme' => 'dark'])
+        ->and(Options::for(null)->all()->all())->toBe(['theme' => 'dark'])
+        ->and(Options::actingAs(User::query()->create(), fn () => Options::all()->keys()->sort()->values()->all()))
+        ->toBe(['admin-only', 'theme'])
+        ->and(Options::withoutAuthorization(fn () => Options::all()->count()))->toBe(3);
+});
+
+it('returns everything stored from all() when authorization is off', function (): void {
+    Options::set(AdminOnlyOption::class, 'secret-admin-value');
+    Option::query()->create(['key' => 'unknown-key', 'value' => 'orphan']);
+
+    expect(Options::all()->all())->toBe(['admin-only' => 'secret-admin-value', 'unknown-key' => 'orphan']);
+});
+
+it('leaves out of the fake all() what the current user may not read', function (): void {
+    $fake = Options::fake();
+    Options::register(['admin' => AdminOnlyOption::class, 'theme' => ThemeOption::class]);
+    Options::set(AdminOnlyOption::class, 'secret-admin-value');
+    Options::set(ThemeOption::class, 'dark');
+
+    config()->set('options.authorization.enabled', true);
+
+    expect($fake->all()->all())->toBe(['theme' => 'dark']);
 });

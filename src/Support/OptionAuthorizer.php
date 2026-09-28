@@ -28,18 +28,25 @@ final class OptionAuthorizer
      */
     public function read(BaseOption $option, ?Model $owner): void
     {
-        if (! $this->shouldEnforce()) {
-            return;
+        if (! $this->allowsRead($option, $owner)) {
+            throw UnauthorizedOption::read($option->key());
+        }
+    }
+
+    /**
+     * Whether the current user may read the option in a scope (always, when
+     * enforcement is off).
+     */
+    public function allowsRead(BaseOption $option, ?Model $owner): bool
+    {
+        if (! $this->enforcing()) {
+            return true;
         }
 
         $user = $this->currentUser();
 
-        $allowed = $option->authorizeRead($user, $owner)
+        return $option->authorizeRead($user, $owner)
             && $this->passesGate('option.read', $user, $option, $owner);
-
-        if (! $allowed) {
-            throw UnauthorizedOption::read($option->key());
-        }
     }
 
     /**
@@ -47,7 +54,7 @@ final class OptionAuthorizer
      */
     public function write(BaseOption $option, ?Model $owner): void
     {
-        if (! $this->shouldEnforce()) {
+        if (! $this->enforcing()) {
             return;
         }
 
@@ -104,7 +111,10 @@ final class OptionAuthorizer
         return $this->withoutAuthorization($callback);
     }
 
-    private function shouldEnforce(): bool
+    /**
+     * Whether access is being enforced right now: enabled, and not bypassed.
+     */
+    public function enforcing(): bool
     {
         if ($this->bypass) {
             return false;

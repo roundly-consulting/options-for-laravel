@@ -211,6 +211,9 @@ class OptionsManager
 
     /**
      * Eager-load every stored option for a scope as raw key => value pairs.
+     * With authorization enforced, only registered options the current user
+     * may read are included: a stored key no registered class answers for
+     * cannot be checked, so it is left out.
      *
      * @return Collection<string, mixed>
      */
@@ -218,10 +221,10 @@ class OptionsManager
     {
         $model = OptionModel::class();
 
-        return $model::query()
+        return $this->onlyReadable($model::query()
             ->forOwner($owner)
             ->get()
-            ->mapWithKeys(fn (Option $option): array => [$option->key => $option->value]);
+            ->mapWithKeys(fn (Option $option): array => [$option->key => $option->value]), $owner);
     }
 
     /**
@@ -379,6 +382,37 @@ class OptionsManager
         }
 
         return $instance;
+    }
+
+    /**
+     * Drop the values the current user may not read, when authorization is enforced.
+     *
+     * @param  Collection<string, mixed>  $values
+     * @return Collection<string, mixed>
+     */
+    protected function onlyReadable(Collection $values, ?Model $owner): Collection
+    {
+        $authorizer = app(OptionAuthorizer::class);
+
+        if (! $authorizer->enforcing()) {
+            return $values;
+        }
+
+        $classes = [];
+
+        foreach ($this->registered() as $class) {
+            $classes[$class::for(null)->key()] = $class;
+        }
+
+        return $values->filter(function (mixed $value, string $key) use ($classes, $owner, $authorizer): bool {
+            if (! isset($classes[$key])) {
+                return false;
+            }
+
+            $option = $classes[$key]::for($owner);
+
+            return ! $option instanceof BaseOption || $authorizer->allowsRead($option, $owner);
+        });
     }
 
     /**

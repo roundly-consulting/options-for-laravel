@@ -101,7 +101,7 @@ final class OptionsFake extends OptionsManager
      */
     public function all(?Model $owner = null): Collection
     {
-        return collect($this->store[$this->scope($owner)] ?? []);
+        return $this->onlyReadable(collect($this->store[$this->scope($owner)] ?? []), $owner);
     }
 
     /**
