@@ -53,3 +53,12 @@ it('fails with --as when a real user is denied by the option', function (): void
         '--as' => (string) $user->getKey(),
     ])->assertFailed();
 });
+
+it('bypasses authorization by default in the list command', function (): void {
+    Options::withoutAuthorization(fn () => Options::set(AdminOnlyOption::class, 'secret-admin-value'));
+    Options::register(['admin-only' => AdminOnlyOption::class]);
+
+    $this->artisan('options:list')
+        ->expectsOutputToContain('secret-admin-value')
+        ->assertSuccessful();
+});

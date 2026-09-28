@@ -37,17 +37,19 @@ final class ListOptionsCommand extends Command
             return self::SUCCESS;
         }
 
-        $rows = [];
+        // Console commands bypass authorization, like options:get / options:set.
+        /** @var list<array{0: string, 1: string, 2: string}> $rows */
+        $rows = $manager->withoutAuthorization(function () use ($manager, $registered, $owner): array {
+            $rows = [];
 
-        foreach ($registered as $key => $class) {
-            $option = $manager->resolve($class, $owner);
+            foreach ($registered as $key => $class) {
+                $option = $manager->resolve($class, $owner);
 
-            $rows[] = [
-                $key,
-                $option->readable(),
-                $this->stringify($option->value()),
-            ];
-        }
+                $rows[] = [$key, $option->readable(), $this->stringify($option->value())];
+            }
+
+            return $rows;
+        });
 
         $this->table(['Key', 'Readable', 'Value'], $rows);
 
