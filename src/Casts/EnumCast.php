@@ -7,7 +7,7 @@ namespace RoundlyConsulting\Options\Casts;
 use BackedEnum;
 use Illuminate\Contracts\Database\Eloquent\CastsAttributes;
 use Illuminate\Database\Eloquent\Model;
-use ValueError;
+use ReflectionEnum;
 
 /**
  * Generic backed-enum cast. Pass the enum class as a cast parameter, e.g.
@@ -35,13 +35,10 @@ final class EnumCast implements CastsAttributes
             return $value;
         }
 
-        $enum = $this->enum;
+        $backing = $this->backingValue($value);
 
-        try {
-            return $enum::from(is_int($value) ? $value : (string) $value);
-        } catch (ValueError) {
-            return $enum::tryFrom(is_int($value) ? $value : (string) $value);
-        }
+        // A value that cannot be this enum's backing type is not a case either.
+        return $backing === null ? null : ($this->enum)::tryFrom($backing);
     }
 
     /**
@@ -58,5 +55,25 @@ final class EnumCast implements CastsAttributes
         }
 
         return is_int($value) ? $value : (string) $value;
+    }
+
+    /**
+     * The stored value as the enum's backing type. The `value` column is text,
+     * so an int-backed enum comes back as a numeric string that `tryFrom()`
+     * would reject with a TypeError under strict types.
+     */
+    private function backingValue(mixed $value): int|string|null
+    {
+        if (! is_scalar($value)) {
+            return null;
+        }
+
+        if ((string) (new ReflectionEnum($this->enum))->getBackingType() !== 'int') {
+            return (string) $value;
+        }
+
+        $int = filter_var($value, FILTER_VALIDATE_INT);
+
+        return $int === false ? null : $int;
     }
 }
