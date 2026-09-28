@@ -2,16 +2,19 @@
 
 declare(strict_types=1);
 
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Facades\Crypt;
 use RoundlyConsulting\Options\Casts\EncryptedCast;
 use RoundlyConsulting\Options\Casts\EnumCast;
 use RoundlyConsulting\Options\Exceptions\EncryptionNotSupported;
+use RoundlyConsulting\Options\Facades\Options;
 use RoundlyConsulting\Options\Option;
 use RoundlyConsulting\Options\Support\Cache;
 use RoundlyConsulting\Options\Tests\Options\EncryptedCollectionOption;
 use RoundlyConsulting\Options\Tests\Options\EncryptedEnumOption;
 use RoundlyConsulting\Options\Tests\Options\EncryptedInstanceCastOption;
+use RoundlyConsulting\Options\Tests\Options\EncryptedIntegerOption;
 use RoundlyConsulting\Options\Tests\Options\SecretOption;
 use RoundlyConsulting\Options\Tests\Options\Status;
 
@@ -135,3 +138,37 @@ it('encrypts an option that casts to an enum via a class-string', function (): v
 it('rejects encrypting an option whose castAs is an instance', function (): void {
     EncryptedInstanceCastOption::make()->set(Status::Active);
 })->throws(EncryptionNotSupported::class);
+
+it('rehydrates an encrypted integer option read from the database', function (): void {
+    EncryptedIntegerOption::make()->set(42);
+
+    Options::flushCache();
+
+    expect(EncryptedIntegerOption::make()->value())->toBe(42);
+});
+
+it('rehydrates scalar inner casts', function (string $inner, mixed $value, mixed $expected): void {
+    $cast = new EncryptedCast($inner);
+    $model = new Option;
+
+    $stored = $cast->set($model, 'value', $value, []);
+
+    expect($cast->get($model, 'value', $stored, []))->toBe($expected);
+})->with([
+    'integer' => ['integer', 42, 42],
+    'integer from a string' => ['integer', '7', 7],
+    'boolean false' => ['boolean', false, false],
+    'boolean true' => ['boolean', true, true],
+    'float' => ['float', 1.5, 1.5],
+    'native enum' => [Status::class, Status::Active, Status::Active],
+]);
+
+it('rehydrates a datetime inner cast', function (): void {
+    $cast = new EncryptedCast('immutable_datetime');
+    $model = new Option;
+
+    $stored = $cast->set($model, 'value', CarbonImmutable::parse('2026-01-02 03:04:05'), []);
+
+    expect(Crypt::decryptString($stored))->toBe('2026-01-02 03:04:05')
+        ->and($cast->get($model, 'value', $stored, [])?->toDateTimeString())->toBe('2026-01-02 03:04:05');
+});
