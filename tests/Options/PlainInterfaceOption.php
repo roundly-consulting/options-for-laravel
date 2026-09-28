@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\Options\Tests\Options;
 
-use Illuminate\Contracts\Database\Eloquent\CastsAttributes;
 use Illuminate\Database\Eloquent\Model;
 use RoundlyConsulting\Options\OptionInterface;
 
@@ -40,7 +39,7 @@ final class PlainInterfaceOption implements OptionInterface
         return 'default';
     }
 
-    public function castAs(): string|CastsAttributes
+    public function castAs(): string
     {
         return 'string';
     }
