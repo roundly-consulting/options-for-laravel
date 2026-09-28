@@ -24,9 +24,21 @@ final class OptionStore
      */
     public static function fingerprint(string $key, ?string $ownerType = null, int|string|null $ownerId = null): string
     {
-        $scope = $ownerType === null ? 'global' : md5($ownerType.$ownerId);
+        return "options:{$key}:".self::scope($ownerType, $ownerId);
+    }
 
-        return "options:{$key}:{$scope}";
+    /**
+     * One owner scope as a fixed-width token (`global` without an owner). The
+     * type is length-prefixed so no (type, id) pair can spell another one, as
+     * `team1` + `3` and `team` + `13` would when simply concatenated.
+     */
+    public static function scope(?string $ownerType = null, int|string|null $ownerId = null): string
+    {
+        if ($ownerType === null) {
+            return 'global';
+        }
+
+        return md5(strlen($ownerType).':'.$ownerType.'|'.$ownerId);
     }
 
     public function isEnabled(): bool
