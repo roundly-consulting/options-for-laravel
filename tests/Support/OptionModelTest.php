@@ -2,8 +2,6 @@
 
 declare(strict_types=1);
 
-use RoundlyConsulting\Options\Actions\ExportOptionsAction;
-use RoundlyConsulting\Options\Actions\ImportOptionsAction;
 use RoundlyConsulting\Options\Facades\Options;
 use RoundlyConsulting\Options\Option;
 use RoundlyConsulting\Options\Support\Cache;
@@ -46,10 +44,10 @@ it('exports and imports through the configured host model', function (): void {
 
     Options::set(ThemeOption::class, 'dark');
 
-    $json = app(ExportOptionsAction::class)->toJson();
+    $json = Options::exportJson();
 
     CustomOption::query()->forceDelete();
 
-    expect(app(ImportOptionsAction::class)->fromJson($json))->toBe(1)
+    expect(Options::import($json))->toBe(1)
         ->and(CustomOption::query()->count())->toBe(1);
 });

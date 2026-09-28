@@ -6,8 +6,8 @@ namespace RoundlyConsulting\Options\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
-use RoundlyConsulting\Options\Actions\ImportOptionsAction;
 use RoundlyConsulting\Options\Exceptions\OptionException;
+use RoundlyConsulting\Options\OptionsManager;
 
 final class ImportOptionsCommand extends Command
 {
@@ -15,7 +15,7 @@ final class ImportOptionsCommand extends Command
 
     protected $description = 'Import options from a JSON export file';
 
-    public function handle(ImportOptionsAction $action): int
+    public function handle(OptionsManager $options): int
     {
         /** @var string $path */
         $path = $this->argument('path');
@@ -27,7 +27,7 @@ final class ImportOptionsCommand extends Command
         }
 
         try {
-            $count = $action->fromJson(File::get($path));
+            $count = $options->import(File::get($path));
         } catch (OptionException $exception) {
             $this->error($exception->getMessage());
 

@@ -7,10 +7,12 @@ namespace RoundlyConsulting\Options;
 use Closure;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
+use RoundlyConsulting\Options\DataTransferObjects\OptionPayload;
 use RoundlyConsulting\Options\Exceptions\InvalidOptionClassName;
 
 /**
- * Owner-scoped fluent builder.
+ * Owner-scoped fluent handle (`Options::for($team)`); every call goes through
+ * the manager, so `Options::fake()` sees it.
  */
 final class PendingOptions
 {
@@ -82,6 +84,16 @@ final class PendingOptions
     public function all(): Collection
     {
         return $this->manager->all($this->owner);
+    }
+
+    /**
+     * This scope's stored options as payloads — only the global ones for `for(null)`.
+     *
+     * @return list<OptionPayload>
+     */
+    public function export(): array
+    {
+        return $this->manager->export($this->owner, globalOnly: $this->owner === null);
     }
 
     private function resolveOption(string $option): BaseOption

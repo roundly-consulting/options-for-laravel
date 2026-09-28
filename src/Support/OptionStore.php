@@ -16,6 +16,16 @@ use Illuminate\Support\Facades\Cache as CacheManager;
  */
 final class OptionStore
 {
+    /**
+     * The cache fingerprint of one option key in one scope (null owner = global).
+     */
+    public static function fingerprint(string $key, ?string $ownerType = null, int|string|null $ownerId = null): string
+    {
+        $scope = $ownerType === null ? 'global' : md5($ownerType.$ownerId);
+
+        return "options:{$key}:{$scope}";
+    }
+
     public function isEnabled(): bool
     {
         return (bool) config('options.cache.enabled', true);

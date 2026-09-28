@@ -21,6 +21,12 @@ use RoundlyConsulting\Options\Support\OptionModel;
 use RoundlyConsulting\Options\Support\OptionStore;
 
 /**
+ * A setting. Extend it and override the hooks (`key`, `default`, `castAs`,
+ * `encrypted`, `rules`, `authorizeRead/Write`, presentation). The value
+ * operations (`value`, `set`, `has`, `forget`, `reset`, `remember`) are final
+ * and go through the bound `OptionsManager`, so `Options::fake()` sees calls
+ * made on an option instance too.
+ *
  * @phpstan-consistent-constructor
  */
 abstract class BaseOption implements OptionInterface
@@ -99,7 +105,18 @@ abstract class BaseOption implements OptionInterface
         return true;
     }
 
-    public function value(): mixed
+    /**
+     * The current value — read through the (possibly faked) options manager.
+     */
+    final public function value(): mixed
+    {
+        return self::manager()->get(static::class, $this->owner);
+    }
+
+    /**
+     * @internal the storage read behind `Options::get()`; call `value()` instead
+     */
+    final public function loadValue(): mixed
     {
         $this->guardRead();
 
@@ -153,7 +170,50 @@ abstract class BaseOption implements OptionInterface
         return [];
     }
 
-    public function set(mixed $value): void
+    /**
+     * Persist a new value — written through the (possibly faked) options manager.
+     */
+    final public function set(mixed $value): void
+    {
+        self::manager()->set(static::class, $value, $this->owner);
+    }
+
+    /**
+     * Whether a value is stored in this scope.
+     */
+    final public function has(): bool
+    {
+        return self::manager()->has(static::class, $this->owner);
+    }
+
+    /**
+     * Delete the stored value, reverting to the default.
+     */
+    final public function forget(): void
+    {
+        self::manager()->forget(static::class, $this->owner);
+    }
+
+    /**
+     * Alias of forget().
+     */
+    final public function reset(): void
+    {
+        self::manager()->reset(static::class, $this->owner);
+    }
+
+    /**
+     * The stored value, or store and return the callback's result when unset.
+     */
+    final public function remember(Closure $callback): mixed
+    {
+        return self::manager()->remember(static::class, $callback, $this->owner);
+    }
+
+    /**
+     * @internal the storage write behind `Options::set()`; call `set()` instead
+     */
+    final public function storeValue(mixed $value): void
     {
         $this->guardWrite();
 
@@ -182,7 +242,10 @@ abstract class BaseOption implements OptionInterface
         }
     }
 
-    public function has(): bool
+    /**
+     * @internal the storage check behind `Options::has()`; call `has()` instead
+     */
+    final public function isStored(): bool
     {
         $this->guardRead();
 
@@ -192,7 +255,10 @@ abstract class BaseOption implements OptionInterface
             ->exists();
     }
 
-    public function forget(): void
+    /**
+     * @internal the storage delete behind `Options::forget()`; call `forget()` instead
+     */
+    final public function deleteValue(): void
     {
         $this->guardWrite();
 
@@ -208,24 +274,6 @@ abstract class BaseOption implements OptionInterface
         if ($this->eventsEnabled()) {
             OptionForgotten::dispatch($this->key(), $this->owner);
         }
-    }
-
-    public function reset(): void
-    {
-        $this->forget();
-    }
-
-    public function remember(Closure $callback): mixed
-    {
-        if ($this->has()) {
-            return $this->value();
-        }
-
-        $value = $callback();
-
-        $this->set($value);
-
-        return $value;
     }
 
     protected function guardRead(): void
@@ -306,13 +354,7 @@ abstract class BaseOption implements OptionInterface
 
     protected function fingerprint(): string
     {
-        $ownerIdentifier = 'global';
-
-        if (! is_null($this->owner)) {
-            $ownerIdentifier = md5($this->owner->getMorphClass().$this->owner->getKey());
-        }
-
-        return "options:{$this->key()}:{$ownerIdentifier}";
+        return OptionStore::fingerprint($this->key(), $this->owner?->getMorphClass(), $this->owner?->getKey());
     }
 
     /**
@@ -323,5 +365,10 @@ abstract class BaseOption implements OptionInterface
         $model = OptionModel::class();
 
         return $model::query();
+    }
+
+    private static function manager(): OptionsManager
+    {
+        return app(OptionsManager::class);
     }
 }

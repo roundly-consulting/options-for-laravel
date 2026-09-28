@@ -8,8 +8,12 @@ use Closure;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
+use RoundlyConsulting\Options\Actions\ExportOptionsAction;
+use RoundlyConsulting\Options\Actions\ImportOptionsAction;
+use RoundlyConsulting\Options\DataTransferObjects\OptionPayload;
 use RoundlyConsulting\Options\Exceptions\InvalidOptionClassName;
 use RoundlyConsulting\Options\Exceptions\InvalidOptionGroup;
+use RoundlyConsulting\Options\Exceptions\InvalidOptionPayload;
 use RoundlyConsulting\Options\Groups\OptionGroup;
 use RoundlyConsulting\Options\Groups\PendingGroup;
 use RoundlyConsulting\Options\Support\Cache;
@@ -18,8 +22,14 @@ use RoundlyConsulting\Options\Support\OptionAuthorizer;
 use RoundlyConsulting\Options\Support\OptionModel;
 use RoundlyConsulting\Options\Support\OptionObservers;
 use RoundlyConsulting\Options\Support\OptionStore;
-use RoundlyConsulting\Options\Testing\FakeOptionsManager;
 
+/**
+ * The facade root (`Options`), bound as a singleton. Every value operation —
+ * including those called on an option instance, a `for()` / `option()` /
+ * `group()` handle or the `HasOptions` trait — funnels through `get`, `set`,
+ * `has`, `forget` and `import` here, which is what `OptionsFake` overrides.
+ * Not final: `OptionsFake` extends it.
+ */
 class OptionsManager
 {
     /**
@@ -30,18 +40,6 @@ class OptionsManager
     protected array $registry = [];
 
     private bool $registrySeeded = false;
-
-    /**
-     * Swap the bound manager for an in-memory fake and return it.
-     */
-    public static function fake(): FakeOptionsManager
-    {
-        $fake = new FakeOptionsManager;
-
-        app()->instance(OptionsManager::class, $fake);
-
-        return $fake;
-    }
 
     /**
      * Register string keys for class-string options.
@@ -122,7 +120,9 @@ class OptionsManager
      */
     public function get(string $option, ?Model $owner = null): mixed
     {
-        return $this->resolve($option, $owner)->value();
+        $instance = $this->resolve($option, $owner);
+
+        return $instance instanceof BaseOption ? $instance->loadValue() : $instance->value();
     }
 
     /**
@@ -130,7 +130,15 @@ class OptionsManager
      */
     public function set(string $option, mixed $value, ?Model $owner = null): void
     {
-        $this->resolve($option, $owner)->set($value);
+        $instance = $this->resolve($option, $owner);
+
+        if ($instance instanceof BaseOption) {
+            $instance->storeValue($value);
+
+            return;
+        }
+
+        $instance->set($value);
     }
 
     /**
@@ -138,7 +146,7 @@ class OptionsManager
      */
     public function has(string $option, ?Model $owner = null): bool
     {
-        return $this->resolveOption($option, $owner)->has();
+        return $this->resolveOption($option, $owner)->isStored();
     }
 
     /**
@@ -146,7 +154,7 @@ class OptionsManager
      */
     public function forget(string $option, ?Model $owner = null): void
     {
-        $this->resolveOption($option, $owner)->forget();
+        $this->resolveOption($option, $owner)->deleteValue();
     }
 
     /**
@@ -154,7 +162,7 @@ class OptionsManager
      */
     public function reset(string $option, ?Model $owner = null): void
     {
-        $this->resolveOption($option, $owner)->reset();
+        $this->forget($option, $owner);
     }
 
     /**
@@ -162,7 +170,15 @@ class OptionsManager
      */
     public function remember(string $option, Closure $callback, ?Model $owner = null): mixed
     {
-        return $this->resolveOption($option, $owner)->remember($callback);
+        if ($this->has($option, $owner)) {
+            return $this->get($option, $owner);
+        }
+
+        $value = $callback();
+
+        $this->set($option, $value, $owner);
+
+        return $value;
     }
 
     /**
@@ -207,6 +223,42 @@ class OptionsManager
             ->forOwner($owner)
             ->get()
             ->mapWithKeys(fn (Option $option): array => [$option->key => $option->value]);
+    }
+
+    /**
+     * Stored options as raw payloads (encrypted values stay encrypted). With an
+     * owner: that owner's options; without: everything, or only the global
+     * ones with `$globalOnly`.
+     *
+     * @return list<OptionPayload>
+     */
+    public function export(?Model $owner = null, bool $globalOnly = false): array
+    {
+        return app(ExportOptionsAction::class)->execute($owner, $globalOnly);
+    }
+
+    /**
+     * `export()` as a JSON array of `{key, value, owner_type, owner_id}` rows.
+     */
+    public function exportJson(?Model $owner = null, bool $globalOnly = false): string
+    {
+        return json_encode(
+            array_map(static fn (OptionPayload $payload): array => $payload->toArray(), $this->export($owner, $globalOnly)),
+            JSON_THROW_ON_ERROR,
+        );
+    }
+
+    /**
+     * Upsert exported options by scope + key: a JSON export, decoded rows or
+     * `OptionPayload`s. Returns the number imported.
+     *
+     * @param  array<mixed>|string  $payload
+     *
+     * @throws InvalidOptionPayload
+     */
+    public function import(array|string $payload): int
+    {
+        return app(ImportOptionsAction::class)->execute($this->payloads($payload));
     }
 
     /**
@@ -309,7 +361,7 @@ class OptionsManager
     }
 
     /**
-     * Resolve a global-scope BaseOption instance (used by the config bridge).
+     * @internal resolves a BaseOption for the config bridge; hosts use `resolve()`
      */
     public function resolveOptionInstance(string $option, ?Model $owner = null): BaseOption
     {
@@ -328,6 +380,17 @@ class OptionsManager
         }
 
         return $instance;
+    }
+
+    /**
+     * @param  array<mixed>|string  $payload
+     * @return list<OptionPayload>
+     *
+     * @throws InvalidOptionPayload
+     */
+    protected function payloads(array|string $payload): array
+    {
+        return is_string($payload) ? OptionPayload::listFromJson($payload) : OptionPayload::list($payload);
     }
 
     /**

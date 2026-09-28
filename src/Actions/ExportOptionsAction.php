@@ -9,11 +9,15 @@ use RoundlyConsulting\Options\DataTransferObjects\OptionPayload;
 use RoundlyConsulting\Options\Option;
 use RoundlyConsulting\Options\Support\OptionModel;
 
-final class ExportOptionsAction
+/**
+ * Exports stored options as raw payloads (encrypted values stay encrypted).
+ * Reach it through `Options::export()` / `Options::exportJson()`.
+ */
+final readonly class ExportOptionsAction
 {
     /**
-     * Export stored options as a list of payloads. Without an owner, every
-     * stored option (global and owned) is exported.
+     * With an owner: that owner's options. Without: every stored option
+     * (global and owned), or only the global ones with `$globalOnly`.
      *
      * @return list<OptionPayload>
      */
@@ -29,7 +33,7 @@ final class ExportOptionsAction
             $query->forOwner(null);
         }
 
-        return array_values($query->get()
+        return array_values($query->orderBy('id')->get()
             ->map(fn (Option $option): OptionPayload => new OptionPayload(
                 key: $option->key,
                 value: $option->value,
@@ -37,18 +41,5 @@ final class ExportOptionsAction
                 ownerId: $option->owner_id,
             ))
             ->all());
-    }
-
-    /**
-     * Export options as a JSON string.
-     */
-    public function toJson(?Model $owner = null, bool $globalOnly = false): string
-    {
-        $payloads = array_map(
-            fn (OptionPayload $payload): array => $payload->toArray(),
-            $this->execute($owner, $globalOnly),
-        );
-
-        return json_encode($payloads, JSON_THROW_ON_ERROR);
     }
 }

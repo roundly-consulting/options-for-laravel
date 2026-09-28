@@ -6,9 +6,9 @@ namespace RoundlyConsulting\Options\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
-use RoundlyConsulting\Options\Actions\ExportOptionsAction;
 use RoundlyConsulting\Options\Commands\Concerns\ResolvesOwner;
 use RoundlyConsulting\Options\Exceptions\OptionException;
+use RoundlyConsulting\Options\OptionsManager;
 
 final class ExportOptionsCommand extends Command
 {
@@ -21,7 +21,7 @@ final class ExportOptionsCommand extends Command
 
     protected $description = 'Export stored options as JSON';
 
-    public function handle(ExportOptionsAction $action): int
+    public function handle(OptionsManager $options): int
     {
         try {
             $owner = $this->resolveOwner();
@@ -31,7 +31,7 @@ final class ExportOptionsCommand extends Command
             return self::FAILURE;
         }
 
-        $json = $action->toJson($owner);
+        $json = $options->exportJson($owner);
 
         /** @var string|null $path */
         $path = $this->option('path');

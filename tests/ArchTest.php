@@ -23,8 +23,8 @@ ArchPresets::strictTypes('RoundlyConsulting\Options');
  *  - Option — `options.model` invites a host to subclass it (pinned by the preset below).
  *  - BaseOption / OptionGroup — the whole public API. A host defines its settings by
  *    extending these; `make:option` scaffolds exactly that.
- *  - OptionsManager — the package ships `FakeOptionsManager extends OptionsManager` as its
- *    own test double, so closing it would break the fake it ships.
+ *  - OptionsManager — the package ships `OptionsFake extends OptionsManager` as its
+ *    own test double (`toBeFakeable()` pins the subtype), so closing it would break the fake.
  *  - OptionException — the base every options error extends, so a host can catch them
  *    uniformly.
  *
@@ -112,3 +112,6 @@ ArchPresets::morphColumnsUseTheSeam(__DIR__.'/../database/migrations');
 ArchPresets::runtimeRequireIsWhitelisted(__DIR__.'/../composer.json');
 
 ArchPresets::noDebuggingLeftovers();
+
+/** The `HasOptions` trait reaches behaviour through the manager, never an action. */
+ArchPresets::modelsGoThroughTheFacade('RoundlyConsulting\Options');

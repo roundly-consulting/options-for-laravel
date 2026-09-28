@@ -17,7 +17,7 @@ use RoundlyConsulting\Options\Database\Factories\OptionFactory;
 
 /**
  * @property int $id
- * @property int|null $owner_id
+ * @property int|string|null $owner_id
  * @property string|null $owner_type
  * @property string $key
  * @property string|null $value
