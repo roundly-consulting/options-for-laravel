@@ -102,7 +102,7 @@ return [
 | Key | Type | Default | Env | Purpose |
 |---|---|---|---|---|
 | `model` | `class-string` | `Option::class` | — | Eloquent model used to persist options. Must extend `RoundlyConsulting\Options\Option`. |
-| `key_type` | `string` | `bigint` | `OPTIONS_KEY_TYPE` | Key type of the polymorphic `owner` column: `bigint`, `uuid` or `ulid` (anything else falls back to `bigint`). Fixed when the migration runs, so set it before publishing the migration. |
+| `key_type` | `string` | `bigint` | `OPTIONS_KEY_TYPE` | Key type of the polymorphic `owner` column: `bigint`, `uuid` or `ulid` (case-insensitive; anything else throws `InvalidConfigurationException` when the migration runs). Fixed when the migration runs, so set it before publishing the migration. |
 | `registry` | `array<string, class-string>` | `[]` | — | Optional map of string keys to option classes for key-based access. |
 | `cache.enabled` | `bool` | `true` | `OPTIONS_CACHE_ENABLED` | Enable the persistent (cross-request) cache layer. |
 | `cache.store` | `?string` | `null` | `OPTIONS_CACHE_STORE` | Cache store name; `null` uses the default store. |
