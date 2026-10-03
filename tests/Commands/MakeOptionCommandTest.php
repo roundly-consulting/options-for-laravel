@@ -4,14 +4,23 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\File;
 
+/*
+ * The generator writes into app/Options: a throwaway app/ per test, never the shared testbench
+ * skeleton every parallel process boots from. The app path is read when the command runs, so
+ * pointing it here is enough. The namespace is resolved first — Laravel derives it by
+ * matching app/ against the skeleton's composer.json, which a sandbox would not match.
+ */
 beforeEach(function (): void {
-    $this->target = app_path('Options');
+    $this->app->getNamespace();
+    $this->app->useAppPath($this->sandbox = sys_get_temp_dir().'/options-make-option-'.bin2hex(random_bytes(6)));
 
-    File::deleteDirectory($this->target);
+    $this->target = app_path('Options');
 });
 
-afterEach(function (): void {
-    File::deleteDirectory($this->target);
+afterEach(fn () => File::deleteDirectory($this->sandbox));
+
+it('generates into the sandbox, never the shared skeleton', function (): void {
+    expect($this->target)->toContain('options-make-option-');
 });
 
 it('generates an option class with key and cast', function (): void {

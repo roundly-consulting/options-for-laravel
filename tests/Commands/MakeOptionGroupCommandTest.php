@@ -8,14 +8,23 @@ use RoundlyConsulting\Options\Facades\Options;
 use RoundlyConsulting\Options\Tests\Options\LocaleOption;
 use RoundlyConsulting\Options\Tests\Options\ThemeOption;
 
+/*
+ * The generator writes into app/Settings: a throwaway app/ per test, never the shared testbench
+ * skeleton every parallel process boots from. The app path is read when the command runs, so
+ * pointing it here is enough. The namespace is resolved first — Laravel derives it by
+ * matching app/ against the skeleton's composer.json, which a sandbox would not match.
+ */
 beforeEach(function (): void {
-    $this->target = app_path('Settings');
+    $this->app->getNamespace();
+    $this->app->useAppPath($this->sandbox = sys_get_temp_dir().'/options-make-group-'.bin2hex(random_bytes(6)));
 
-    File::deleteDirectory($this->target);
+    $this->target = app_path('Settings');
 });
 
-afterEach(function (): void {
-    File::deleteDirectory($this->target);
+afterEach(fn () => File::deleteDirectory($this->sandbox));
+
+it('generates into the sandbox, never the shared skeleton', function (): void {
+    expect($this->target)->toContain('options-make-group-');
 });
 
 it('generates an option group class', function (): void {

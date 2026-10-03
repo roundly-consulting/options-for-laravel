@@ -10,8 +10,8 @@ use RoundlyConsulting\Options\Tests\Options\ThemeOption;
 
 beforeEach(function (): void {
     app(Cache::class)->flush();
-    $this->path = storage_path('options-export.json');
-    File::delete($this->path);
+    // A throwaway file per test, never the shared testbench skeleton's storage/.
+    $this->path = sys_get_temp_dir().'/options-export-'.bin2hex(random_bytes(6)).'.json';
 });
 
 afterEach(fn () => File::delete($this->path));
