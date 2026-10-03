@@ -9,6 +9,7 @@ use RoundlyConsulting\Options\Facades\Options;
 use RoundlyConsulting\Options\Support\OptionAuthorizer;
 use RoundlyConsulting\Options\Support\OptionStore;
 use RoundlyConsulting\Options\Tests\Options\ThemeOption;
+use RoundlyConsulting\PackageToolkit\Exceptions\InvalidConfigurationException;
 
 /**
  * Every switch arrives from `.env` as a string; `off` / `no` must switch it off,
@@ -44,3 +45,13 @@ it('reads env-string event switches as booleans', function (): void {
 
     Event::assertNotDispatched(OptionResolved::class);
 });
+
+it('throws on a switch typo instead of reading it as the default (strict config)', function (string $key, Closure $read): void {
+    config()->set($key, 'disabled');
+
+    expect($read)->toThrow(InvalidConfigurationException::class, "Configuration value [{$key}] must be a boolean (true/false, 1/0, on/off or yes/no), [disabled] given.");
+})->with([
+    'cache' => ['options.cache.enabled', fn (): bool => app(OptionStore::class)->isEnabled()],
+    'authorization' => ['options.authorization.enabled', fn (): bool => app(OptionAuthorizer::class)->enforcing()],
+    'events' => ['options.events.enabled', fn () => Options::set(ThemeOption::class, 'dark')],
+]);
