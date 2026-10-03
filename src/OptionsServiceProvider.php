@@ -59,7 +59,7 @@ final class OptionsServiceProvider extends PackageServiceProvider
                 'Registry' => self::countOf('options.registry').' key(s)',
                 'Groups' => self::countOf('options.groups').' group(s)',
                 'Cache' => self::switch('options.cache.enabled', true),
-                'Cache store' => config('options.cache.store') === null ? 'DEFAULT' : 'SET',
+                'Cache store' => OptionsConfig::cacheStore() === null ? 'DEFAULT' : 'SET',
                 'Cache TTL' => self::cacheTtl(),
                 'Events' => self::switch('options.events.enabled', true),
                 'Resolved events' => self::switch('options.events.resolved', false),
