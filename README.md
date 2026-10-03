@@ -105,10 +105,10 @@ return [
 | `key_type` | `string` | `bigint` | `OPTIONS_KEY_TYPE` | Key type of the polymorphic `owner` column: `bigint`, `uuid` or `ulid` (case-insensitive; anything else throws `InvalidConfigurationException` when the migration runs). Fixed when the migration runs, so set it before publishing the migration. |
 | `registry` | `array<string, class-string>` | `[]` | — | Optional map of string keys to option classes for key-based access. |
 | `cache.enabled` | `bool` | `true` | `OPTIONS_CACHE_ENABLED` | Enable the persistent (cross-request) cache layer. |
-| `cache.store` | `?string` | `null` | `OPTIONS_CACHE_STORE` | Cache store name; `null` uses the default store. A blank or non-string value throws. |
-| `cache.ttl` | `?int` | `3600` | `OPTIONS_CACHE_TTL` | Cache lifetime in seconds (a whole number, at least `1`); `null` caches forever. Junk such as `abc` or `0` throws instead of silently disabling the cache. |
-| `cache.prefix` | `string` | `options` | `OPTIONS_CACHE_PREFIX` | Cache key prefix. A blank or non-string value throws. |
-| `cache.tag` | `string` | `options` | `OPTIONS_CACHE_TAG` | Cache tag, so a taggable store (Redis/Memcached) also purges old entries on a flush. A blank or non-string value throws. |
+| `cache.store` | `?string` | `null` | `OPTIONS_CACHE_STORE` | Cache store name; `null` or blank (not set) uses the default store. A non-string value throws. |
+| `cache.ttl` | `?int` | `3600` | `OPTIONS_CACHE_TTL` | Cache lifetime in seconds (a whole number, at least `1`); `null` caches forever, blank (`OPTIONS_CACHE_TTL=`) is not set and gives `3600`. Junk such as `abc` or `0` throws instead of silently disabling the cache. |
+| `cache.prefix` | `string` | `options` | `OPTIONS_CACHE_PREFIX` | Cache key prefix. A blank value is not set and uses the default; a non-string value throws. |
+| `cache.tag` | `string` | `options` | `OPTIONS_CACHE_TAG` | Cache tag, so a taggable store (Redis/Memcached) also purges old entries on a flush. A blank value is not set and uses the default; a non-string value throws. |
 | `events.enabled` | `bool` | `true` | `OPTIONS_EVENTS_ENABLED` | Dispatch `OptionSet`/`OptionForgotten` events. |
 | `events.resolved` | `bool` | `false` | `OPTIONS_EVENTS_RESOLVED` | Also dispatch `OptionResolved` on every read (off by default — it is chatty). |
 | `groups` | `array<string, class-string>` | `[]` | — | Optional map of short keys to `OptionGroup` classes for `Options::group('key')`. |
@@ -118,8 +118,9 @@ return [
 | `config_overrides_live` | `bool` | `false` | `OPTIONS_CONFIG_OVERRIDES_LIVE` | Re-apply a mapped config key in-process on `set()`/`forget()`. Off by default. |
 
 The `bool` switches accept the usual env spellings: `true`/`false`, `1`/`0`, `on`/`off`, `yes`/`no`.
-Every setting is read strictly: an unset key takes its default, and a present but invalid value
-throws `InvalidConfigurationException` naming the key instead of falling back.
+Every setting is read strictly: a key that is not set — absent, `null` or blank (a host's `KEY=`)
+— takes its default, and any other invalid value throws `InvalidConfigurationException` naming the
+key instead of falling back.
 
 ## Usage
 
