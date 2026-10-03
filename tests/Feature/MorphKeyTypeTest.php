@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use RoundlyConsulting\PackageToolkit\Exceptions\InvalidConfigurationException;
 use RoundlyConsulting\Testing\Database\DriverMatrix;
 
 /**
@@ -58,14 +59,15 @@ it('renders each configured key type as a distinct real column type', function (
     'ulid' => ['ulid', 'character(26)'],
 ])->skip($pgsqlOnly, 'needs the postgres catalog to tell the key types apart — sqlite affinity hides it');
 
-it('falls back to the bigint schema for an unrecognized key type', function (): void {
+it('refuses to migrate on an unrecognized key type instead of falling back to bigint', function (): void {
     config()->set('options.key_type', 'nonsense');
 
     Schema::dropIfExists('options');
-    $migration = require __DIR__.'/../../database/migrations/create_options_table.php';
-    $migration->up();
 
-    $expected = DriverMatrix::driver() === 'pgsql' ? 'bigint' : 'integer';
-
-    expect(morphKtColumn('options', 'owner_id')['type'])->toBe($expected);
+    // A typo in a host's config must stop the migration, never silently build bigint
+    // columns for a uuid/ulid-keyed host.
+    expect(function (): void {
+        $migration = require __DIR__.'/../../database/migrations/create_options_table.php';
+        $migration->up();
+    })->toThrow(InvalidConfigurationException::class, 'Configuration value [options.key_type] must be one of [bigint, uuid, ulid] (case-insensitive), [nonsense] given.');
 });
