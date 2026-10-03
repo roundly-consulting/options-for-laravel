@@ -116,7 +116,7 @@ final class OptionStore
 
     private function putValue(Repository $repository, string $cacheKey, StoredValue $value): void
     {
-        $ttl = config('options.cache.ttl', 3600);
+        $ttl = OptionsConfig::cacheTtl();
 
         if ($ttl === null) {
             $repository->forever($cacheKey, $value->toCache());
@@ -124,7 +124,7 @@ final class OptionStore
             return;
         }
 
-        $repository->put($cacheKey, $value->toCache(), (int) $ttl);
+        $repository->put($cacheKey, $value->toCache(), $ttl);
     }
 
     private function repository(): Repository
@@ -140,9 +140,7 @@ final class OptionStore
 
     private function baseRepository(): Repository
     {
-        $store = config('options.cache.store');
-
-        return CacheManager::store(is_string($store) ? $store : null);
+        return CacheManager::store(OptionsConfig::cacheStore());
     }
 
     private function supportsTags(Repository $repository): bool
@@ -197,15 +195,11 @@ final class OptionStore
 
     private function prefix(): string
     {
-        $prefix = config('options.cache.prefix', 'options');
-
-        return is_string($prefix) ? $prefix : 'options';
+        return OptionsConfig::cachePrefix();
     }
 
     private function tag(): string
     {
-        $tag = config('options.cache.tag', 'options');
-
-        return is_string($tag) ? $tag : 'options';
+        return OptionsConfig::cacheTag();
     }
 }

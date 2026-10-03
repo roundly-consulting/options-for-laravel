@@ -22,6 +22,7 @@ use RoundlyConsulting\Options\Support\ConfigBridge;
 use RoundlyConsulting\Options\Support\OptionAuthorizer;
 use RoundlyConsulting\Options\Support\OptionModel;
 use RoundlyConsulting\Options\Support\OptionObservers;
+use RoundlyConsulting\Options\Support\OptionsConfig;
 use RoundlyConsulting\Options\Support\OptionStore;
 use RoundlyConsulting\PackageToolkit\Concerns\RegistersBladeDirectives;
 use RoundlyConsulting\PackageToolkit\Concerns\RegistersBlueprintMacros;
@@ -164,8 +165,8 @@ final class OptionsServiceProvider extends PackageServiceProvider
 
     private static function cacheTtl(): string
     {
-        $ttl = config('options.cache.ttl', 3600);
+        $ttl = OptionsConfig::cacheTtl();
 
-        return (is_numeric($ttl) ? (int) $ttl : 3600).'s';
+        return $ttl === null ? 'FOREVER' : $ttl.'s';
     }
 }
