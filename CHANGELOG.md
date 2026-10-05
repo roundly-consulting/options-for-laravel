@@ -15,6 +15,8 @@ All notable changes to `options-for-laravel` are documented in this file. The fo
 - `options:set --json` with invalid JSON fails with a message instead of storing the raw string.
 - `options:set` reports a value its `rules()` refuse, and `options:set` / `get` / `list` /
   `export` report an unknown `--owner-id`, as a failed command instead of a stack trace.
+- `Options::fake()` throws `InvalidOptionClassName` from `has()` / `forget()` for an option that
+  is not a `BaseOption`, as the real manager does.
 
 ## 1.0.0 - 2026-10-03
 

@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Crypt;
 use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\AssertionFailedError;
 use RoundlyConsulting\Options\DataTransferObjects\OptionPayload;
+use RoundlyConsulting\Options\Exceptions\InvalidOptionClassName;
 use RoundlyConsulting\Options\Facades\Options;
 use RoundlyConsulting\Options\Option;
 use RoundlyConsulting\Options\OptionsManager;
@@ -17,6 +18,7 @@ use RoundlyConsulting\Options\Tests\Options\AgeOption;
 use RoundlyConsulting\Options\Tests\Options\CollectionOption;
 use RoundlyConsulting\Options\Tests\Options\EncryptedIntegerOption;
 use RoundlyConsulting\Options\Tests\Options\LocaleOption;
+use RoundlyConsulting\Options\Tests\Options\PlainInterfaceOption;
 use RoundlyConsulting\Options\Tests\Options\SecretOption;
 use RoundlyConsulting\Options\Tests\Options\Status;
 use RoundlyConsulting\Options\Tests\Options\StatusOption;
@@ -331,4 +333,15 @@ it('returns an imported value it cannot cast as it was given', function (): void
     Options::import([['key' => 'status', 'value' => ['not' => 'a column value']]]);
 
     expect(Options::get(StatusOption::class))->toBe(['not' => 'a column value']);
+});
+
+it('refuses has() and forget() on a plain OptionInterface, like the real manager', function (): void {
+    // Regression (2026-10-05 chat review, C-15): the fake answered false and recorded the
+    // forget, where the real manager throws InvalidOptionClassName.
+    $fake = Options::fake();
+
+    expect(fn () => Options::has(PlainInterfaceOption::class))->toThrow(InvalidOptionClassName::class)
+        ->and(fn () => Options::forget(PlainInterfaceOption::class))->toThrow(InvalidOptionClassName::class);
+
+    $fake->assertNothingForgotten();
 });

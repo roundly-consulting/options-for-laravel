@@ -108,7 +108,9 @@ final class OptionsFake extends OptionsManager
 
     public function has(string $option, ?Model $owner = null): bool
     {
-        $instance = $this->resolve($option, $owner);
+        // resolveOption(): a plain OptionInterface keeps its own storage, so the
+        // real manager refuses has()/forget() for it — and so does the fake.
+        $instance = $this->resolveOption($option, $owner);
         $this->guardRead($instance, $owner);
 
         return array_key_exists($instance->key(), $this->store[$this->scope($owner)] ?? []);
@@ -116,7 +118,7 @@ final class OptionsFake extends OptionsManager
 
     public function forget(string $option, ?Model $owner = null): void
     {
-        $instance = $this->resolve($option, $owner);
+        $instance = $this->resolveOption($option, $owner);
         $this->guardWrite($instance, $owner);
 
         unset($this->store[$this->scope($owner)][$instance->key()]);
