@@ -32,7 +32,9 @@ trait ResolvesOwner
             throw InvalidOwnerModel::for($class.' (missing --owner-id)');
         }
 
-        /** @var Model */
-        return $class::query()->findOrFail($id);
+        /** @var Model|null $owner */
+        $owner = $class::query()->find($id);
+
+        return $owner ?? throw InvalidOwnerModel::for("{$class} (no record with --owner-id={$id})");
     }
 }

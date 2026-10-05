@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace RoundlyConsulting\Options\Commands;
 
 use Illuminate\Console\Command;
+use Illuminate\Validation\ValidationException;
 use JsonException;
 use RoundlyConsulting\Options\Commands\Concerns\ActsAsUser;
 use RoundlyConsulting\Options\Commands\Concerns\ResolvesOwner;
@@ -40,6 +41,12 @@ final class SetOptionCommand extends Command
             });
         } catch (OptionException $exception) {
             $this->error($exception->getMessage());
+
+            return self::FAILURE;
+        } catch (ValidationException $exception) {
+            foreach ($exception->validator->errors()->all() as $message) {
+                $this->error($message);
+            }
 
             return self::FAILURE;
         }

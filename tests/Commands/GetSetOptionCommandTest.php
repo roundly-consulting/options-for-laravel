@@ -6,6 +6,7 @@ use RoundlyConsulting\Options\Facades\Options;
 use RoundlyConsulting\Options\Option;
 use RoundlyConsulting\Options\Support\Cache;
 use RoundlyConsulting\Options\Tests\Models\User;
+use RoundlyConsulting\Options\Tests\Options\AgeOption;
 use RoundlyConsulting\Options\Tests\Options\ArrayOption;
 use RoundlyConsulting\Options\Tests\Options\FlagOption;
 use RoundlyConsulting\Options\Tests\Options\SimpleOption;
@@ -118,3 +119,25 @@ it('refuses invalid json when --json is given', function (): void {
 
     expect(Option::query()->count())->toBe(0);
 });
+
+it('reports a value its rules refuse instead of throwing', function (): void {
+    // Regression (2026-10-05 chat review, C-12): the ValidationException escaped as a trace.
+    $this->artisan('options:set', ['option' => AgeOption::class, 'value' => 'abc'])
+        ->expectsOutputToContain('must be an integer')
+        ->assertFailed();
+
+    expect(Option::query()->count())->toBe(0);
+});
+
+it('reports an unknown --owner-id instead of throwing', function (string $command, array $arguments): void {
+    // Regression (2026-10-05 chat review, C-12): findOrFail()'s ModelNotFoundException
+    // escaped as a trace from every command that takes an owner.
+    $this->artisan($command, [...$arguments, '--owner' => User::class, '--owner-id' => '999'])
+        ->expectsOutputToContain('999')
+        ->assertFailed();
+})->with([
+    'options:set' => ['options:set', ['option' => 'theme', 'value' => 'dark']],
+    'options:get' => ['options:get', ['option' => 'theme']],
+    'options:list' => ['options:list', []],
+    'options:export' => ['options:export', []],
+]);

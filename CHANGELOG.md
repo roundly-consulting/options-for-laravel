@@ -13,6 +13,8 @@ All notable changes to `options-for-laravel` are documented in this file. The fo
 - `make:option` escapes a `--key` or `--cast` containing a quote or backslash, so the generated
   class parses.
 - `options:set --json` with invalid JSON fails with a message instead of storing the raw string.
+- `options:set` reports a value its `rules()` refuse, and `options:set` / `get` / `list` /
+  `export` report an unknown `--owner-id`, as a failed command instead of a stack trace.
 
 ## 1.0.0 - 2026-10-03
 
