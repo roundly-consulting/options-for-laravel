@@ -2,12 +2,15 @@
 
 declare(strict_types=1);
 
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\Cache as CacheFacade;
 use Illuminate\Support\Facades\DB;
 use RoundlyConsulting\Options\Facades\Options;
+use RoundlyConsulting\Options\Option;
 use RoundlyConsulting\Options\Support\Cache;
 use RoundlyConsulting\Options\Support\OptionStore;
 use RoundlyConsulting\Options\Support\StoredValue;
+use RoundlyConsulting\Options\Tests\Options\FlagOption;
 use RoundlyConsulting\Options\Tests\Options\ThemeOption;
 
 beforeEach(function (): void {
@@ -130,4 +133,80 @@ it('starts a fresh generation when the generation key is evicted', function (): 
 
     expect(Options::get(ThemeOption::class))->toBe('edited')
         ->and(CacheFacade::get('options:generation'))->toBeString();
+});
+
+/**
+ * Run the callback as another request would — its own in-request memo — right after this
+ * request's next read of the options table, i.e. between its cache miss and its cache fill.
+ */
+function afterNextOptionsRead(Closure $otherRequest): void
+{
+    $fired = false;
+
+    DB::listen(function (QueryExecuted $query) use (&$fired, $otherRequest): void {
+        if ($fired || preg_match('/^select .* from [`"]?options[`"]?/i', $query->sql) !== 1) {
+            return;
+        }
+
+        $fired = true;
+        $memo = app(Cache::class);
+        app()->instance(Cache::class, new Cache);
+
+        try {
+            $otherRequest();
+        } finally {
+            app()->instance(Cache::class, $memo);
+        }
+    });
+}
+
+it('does not re-cache a value read before a concurrent write', function (): void {
+    // Regression (2026-10-05 chat review, C-2): the reader put() the old row it had read
+    // over the writer's fresh entry, so every request served the old value for the TTL.
+    Options::set(ThemeOption::class, 'light');
+    Options::flushCache();
+
+    afterNextOptionsRead(fn () => Options::set(ThemeOption::class, 'dark'));
+
+    $read = Options::get(ThemeOption::class);
+    app()->forgetInstance(Cache::class);
+
+    expect($read)->toBe('light')
+        ->and(Option::query()->where('key', 'theme')->value('value'))->toBe('dark')
+        ->and(Options::get(ThemeOption::class))->toBe('dark');
+});
+
+it('does not re-cache a value read before a concurrent forget', function (): void {
+    Options::set(ThemeOption::class, 'dark');
+    Options::flushCache();
+
+    afterNextOptionsRead(fn () => Options::forget(ThemeOption::class));
+
+    $read = Options::get(ThemeOption::class);
+    app()->forgetInstance(Cache::class);
+
+    expect($read)->toBe('dark')
+        ->and(Option::query()->count())->toBe(0)
+        ->and(Options::get(ThemeOption::class))->toBe('light');
+});
+
+it('does not re-cache a value read before a concurrent import', function (): void {
+    Options::set(ThemeOption::class, 'light');
+    Options::set(FlagOption::class, false);
+    Options::flushCache();
+
+    afterNextOptionsRead(fn () => Options::import([
+        ['key' => 'theme', 'value' => 'dark'],
+        ['key' => 'flag', 'value' => true],
+    ]));
+
+    $read = Options::get(ThemeOption::class);
+    Options::get(FlagOption::class);
+    app()->forgetInstance(Cache::class);
+    DB::enableQueryLog();
+
+    expect($read)->toBe('light')
+        ->and(Options::get(ThemeOption::class))->toBe('dark')
+        ->and(Options::get(FlagOption::class))->toBeTrue()
+        ->and(DB::getQueryLog())->toBe([]);
 });

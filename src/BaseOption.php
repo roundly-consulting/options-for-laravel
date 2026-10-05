@@ -223,7 +223,7 @@ abstract class BaseOption implements OptionInterface
         app(Cache::class)->put($this->fingerprint(), $stored);
         $this->store()->forget($this->fingerprint());
 
-        $this->afterCommit(function () use ($stored): void {
+        OptionModel::afterCommit(function () use ($stored): void {
             $this->store()->put($this->fingerprint(), $stored);
 
             $this->announce(OptionChangeType::Set, $this->hydrate($stored));
@@ -302,24 +302,13 @@ abstract class BaseOption implements OptionInterface
         app(Cache::class)->put($this->fingerprint(), StoredValue::missing());
         $this->store()->forget($this->fingerprint());
 
-        $this->afterCommit(fn () => $this->announce(OptionChangeType::Forgotten, null));
-    }
+        // An explicit "nothing stored" entry rather than none: a reader that read the
+        // row before the delete cannot fill the gap with it (it only ever add()s).
+        OptionModel::afterCommit(function (): void {
+            $this->store()->put($this->fingerprint(), StoredValue::missing());
 
-    /**
-     * Run the callback once the write is durable: right away outside a
-     * transaction, after the outermost commit inside one, never on rollback.
-     */
-    private function afterCommit(Closure $callback): void
-    {
-        $connection = $this->castingModel()->getConnection();
-
-        if ($connection->transactionLevel() === 0) {
-            $callback();
-
-            return;
-        }
-
-        $connection->afterCommit($callback);
+            $this->announce(OptionChangeType::Forgotten, null);
+        });
     }
 
     /**

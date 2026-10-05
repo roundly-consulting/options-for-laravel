@@ -50,7 +50,10 @@ final class OptionStore
 
     /**
      * Resolve the stored value, caching it persistently when enabled. The
-     * closure provides the fresh value (a DB read).
+     * closure provides the fresh value (a DB read). The read is only cached if
+     * nothing was cached meanwhile (`add()`): a write that landed between this
+     * read and the fill has put a newer value, which an older read must not
+     * overwrite.
      *
      * @param  Closure(): StoredValue  $callback
      */
@@ -71,7 +74,7 @@ final class OptionStore
 
         $value = $callback();
 
-        $this->putValue($repository, $cacheKey, $value);
+        $repository->add($cacheKey, $value->toCache(), OptionsConfig::cacheTtl());
 
         return $value;
     }

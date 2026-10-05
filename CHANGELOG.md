@@ -29,6 +29,9 @@ All notable changes to `options-for-laravel` are documented in this file. The fo
   `OptionForgotten`, calls observers and re-applies live config overrides only after the commit,
   and not at all when it rolls back. Other processes were served the rolled-back value for the
   whole cache TTL.
+- A read that raced a concurrent write, forget or import no longer caches the old value over
+  the new one: reads fill the persistent cache only if it is empty (`add()`), and a forget or
+  import puts its result instead of just dropping the entry.
 
 ## 1.0.0 - 2026-10-03
 
