@@ -175,7 +175,9 @@ class OptionsManager
             return $this->get($option, $owner);
         }
 
-        $this->set($option, $callback(), $owner);
+        // Another first caller may store between has() and here: write only if
+        // nothing is stored yet, so every caller returns the one stored value.
+        $this->setIfAbsent($option, $callback(), $owner);
 
         // What was stored, cast — the same type every later call returns.
         return $this->get($option, $owner);
@@ -398,6 +400,15 @@ class OptionsManager
         }
 
         return $instance;
+    }
+
+    /**
+     * The write behind `remember()`: store the value unless one is stored by now.
+     * `OptionsFake` overrides it.
+     */
+    protected function setIfAbsent(string $option, mixed $value, ?Model $owner = null): void
+    {
+        $this->resolveOption($option, $owner)->storeValueIfAbsent($value);
     }
 
     /**

@@ -216,10 +216,39 @@ abstract class BaseOption implements OptionInterface
 
         $this->persist($stored->raw);
 
-        // Cache what a read of the row returns, so the next get() runs the cast
-        // and yields the same type it would after the cache expires. This request
-        // reads its own write at once (inside a transaction too, as the database
-        // shows it); other processes and the rest of the app only once it commits.
+        $this->written($stored);
+    }
+
+    /**
+     * @internal the storage write behind `Options::remember()`: stores the value
+     * only if none is stored by now. When another caller stored one first, its
+     * value is what this request reads next — never this one.
+     */
+    final public function storeValueIfAbsent(mixed $value): void
+    {
+        $this->assertWritable($value);
+
+        $stored = new StoredValue(true, $this->serializeValue($value));
+
+        $winner = $this->insertIfAbsent($stored->raw);
+
+        if ($winner !== null) {
+            app(Cache::class)->put($this->fingerprint(), $this->storedValueOf($winner));
+
+            return;
+        }
+
+        $this->written($stored);
+    }
+
+    /**
+     * Cache what a read of the row returns, so the next get() runs the cast and
+     * yields the same type it would after the cache expires. This request reads
+     * its own write at once (inside a transaction too, as the database shows
+     * it); other processes and the rest of the app only once it commits.
+     */
+    private function written(StoredValue $stored): void
+    {
         app(Cache::class)->put($this->fingerprint(), $stored);
         $this->store()->forget($this->fingerprint());
 
@@ -390,6 +419,40 @@ abstract class BaseOption implements OptionInterface
         }
     }
 
+    /**
+     * Write the row unless a live one exists; returns that row instead when it
+     * does. A first write relies on the unique index, as persist() does (a
+     * locking read of a missing row would take a gap lock on MySQL, and two of
+     * those deadlock); a forgotten row is locked before it is revived, so only
+     * one caller revives it.
+     */
+    private function insertIfAbsent(?string $raw): ?Option
+    {
+        return $this->castingModel()->getConnection()->transaction(function () use ($raw): ?Option {
+            $row = $this->storedRow();
+
+            if ($row === null) {
+                try {
+                    $this->saveRow($this->newRow(), $raw);
+
+                    return null;
+                } catch (UniqueConstraintViolationException $exception) {
+                    return $this->storedRow(lock: true) ?? throw $exception;
+                }
+            }
+
+            $row = $this->storedRow(lock: true) ?? $row;
+
+            if (! $row->trashed()) {
+                return $row;
+            }
+
+            $this->saveRow($row, $raw);
+
+            return null;
+        });
+    }
+
     private function saveRow(Option $option, ?string $raw): void
     {
         $option->value = $raw;
@@ -462,6 +525,11 @@ abstract class BaseOption implements OptionInterface
             return StoredValue::missing();
         }
 
+        return $this->storedValueOf($option);
+    }
+
+    private function storedValueOf(Option $option): StoredValue
+    {
         $raw = $option->getAttributes()['value'] ?? null;
 
         return new StoredValue(true, is_scalar($raw) ? (string) $raw : null);

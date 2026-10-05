@@ -345,3 +345,22 @@ it('refuses has() and forget() on a plain OptionInterface, like the real manager
 
     $fake->assertNothingForgotten();
 });
+
+it('returns the stored value to both racing first remember() calls, like the real manager', function (): void {
+    $fake = Options::fake();
+
+    $inner = null;
+    $outer = Options::remember(ThemeOption::class, function () use (&$inner): string {
+        $inner = Options::remember(ThemeOption::class, fn (): string => 'from-b');
+
+        return 'from-a';
+    });
+
+    expect($inner)->toBe('from-b')
+        ->and($outer)->toBe('from-b')
+        ->and(Options::get(ThemeOption::class))->toBe('from-b');
+
+    $fake->assertSet(ThemeOption::class, 'from-b');
+
+    expect(fn () => $fake->assertSet(ThemeOption::class, 'from-a'))->toThrow(AssertionFailedError::class);
+});

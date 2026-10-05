@@ -36,6 +36,8 @@ All notable changes to `options-for-laravel` are documented in this file. The fo
   no longer split onto different generations with writes landing where no request reads: the
   generation is minted with `add()` and read back, and writes go under the generation the store
   holds now.
+- `remember()` stores only if nothing is stored by then, so two concurrent first callers both
+  return the one stored value; one used to return a value that was then overwritten.
 
 ## 1.0.0 - 2026-10-03
 

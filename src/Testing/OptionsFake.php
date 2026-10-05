@@ -178,6 +178,16 @@ final class OptionsFake extends OptionsManager
     }
 
     /**
+     * `remember()`'s write: only if nothing is stored by now, as the real manager does.
+     */
+    protected function setIfAbsent(string $option, mixed $value, ?Model $owner = null): void
+    {
+        if (! $this->has($option, $owner)) {
+            $this->set($option, $value, $owner);
+        }
+    }
+
+    /**
      * No database, so no transaction: the batch was already checked up front.
      *
      * @param  list<OptionInterface>  $options
