@@ -6,6 +6,20 @@ All notable changes to `options-for-laravel` are documented in this file. The fo
 
 ## Unreleased
 
+## 1.1.0 - 2026-10-05
+
+### Added
+
+- `Support\OptionAuthorizer::allowsWrite()`, the write counterpart of `allowsRead()`, plus
+  `readablePayloads()` and `authorizeImport()`, which back the export and import authorization.
+
+### Changed
+
+- Maintenance: `composer.json` `homepage` and `support.docs` link to the package documentation.
+- Maintenance: CI also runs the test suite against MySQL 8, alongside SQLite and PostgreSQL.
+- Documentation: the README hero image uses an absolute URL, so it renders on Packagist and other
+  sites.
+
 ### Fixed
 
 - An `EnumCast` option refuses a value that is not one of its enum's cases (a misspelt string,
