@@ -342,13 +342,17 @@ abstract class BaseOption implements OptionInterface
      * Upsert this scope's row. The unique (owner_scope, key) index settles a
      * race between two first writes: the loser's insert fails and it updates
      * the winner's row instead. A forgotten (soft-deleted) row is reused.
+     *
+     * The loser re-reads with a locking read: inside a transaction, a plain read
+     * on MySQL (REPEATABLE READ) is served from the snapshot taken before the
+     * winner committed and would not see its row.
      */
     private function persist(?string $raw): void
     {
         try {
             $this->saveRow($this->storedRow() ?? $this->newRow(), $raw);
         } catch (UniqueConstraintViolationException $exception) {
-            $this->saveRow($this->storedRow() ?? throw $exception, $raw);
+            $this->saveRow($this->storedRow(lock: true) ?? throw $exception, $raw);
         }
     }
 
@@ -368,12 +372,13 @@ abstract class BaseOption implements OptionInterface
         $option->getConnection()->transaction(fn (): bool => $option->save());
     }
 
-    private function storedRow(): ?Option
+    private function storedRow(bool $lock = false): ?Option
     {
         return $this->getModelQuery()
             ->withTrashed()
             ->forOwner($this->owner)
             ->where('key', $this->key())
+            ->when($lock, fn (Builder $query): Builder => $query->lockForUpdate())
             ->first();
     }
 

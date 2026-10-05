@@ -19,6 +19,9 @@ All notable changes to `options-for-laravel` are documented in this file. The fo
   is not a `BaseOption`, as the real manager does.
 - The README's example option adds `required` to its rules: Laravel skips `in:` for a blank
   string, so the documented option stored `''`.
+- On MySQL, two concurrent first writes of an option inside a transaction (`setMany()`, a group
+  `set()`, a host transaction) no longer fail with a duplicate-key error: the loser re-reads the
+  winner's row with a locking read and updates it.
 
 ## 1.0.0 - 2026-10-03
 
