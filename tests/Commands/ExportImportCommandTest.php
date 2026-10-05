@@ -45,3 +45,13 @@ it('fails to import a missing file', function (): void {
     $this->artisan('options:import', ['path' => '/no/such/file.json'])
         ->assertFailed();
 });
+
+it('fails an import with a non-scalar value, writing nothing', function (): void {
+    File::put($this->path, json_encode([['key' => 'theme', 'value' => 'dark'], ['key' => 'b', 'value' => ['n' => 1]]]));
+
+    $this->artisan('options:import', ['path' => $this->path])
+        ->expectsOutputToContain('[b]')
+        ->assertFailed();
+
+    expect(Option::query()->count())->toBe(0);
+});

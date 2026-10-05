@@ -49,10 +49,29 @@ final readonly class OptionPayload
 
         return new self(
             key: $row['key'],
-            value: $row['value'] ?? null,
+            value: self::columnValue($row['key'], $row['value'] ?? null),
             ownerType: $owned ? $ownerType : null,
             ownerId: $owned ? $ownerId : null,
         );
+    }
+
+    /**
+     * @internal the `value` column string an imported value is stored as: a
+     * scalar as the database holds it, or null. Anything else cannot be stored
+     * and is refused before any row is written.
+     *
+     * @throws InvalidOptionPayload
+     */
+    public static function columnValue(string $key, mixed $value): ?string
+    {
+        return match (true) {
+            $value === null => null,
+            is_bool($value) => $value ? '1' : '0',
+            is_scalar($value) => (string) $value,
+            default => throw InvalidOptionPayload::message(
+                "The value of option row [{$key}] must be a string, number, boolean or null, ".get_debug_type($value).' given.',
+            ),
+        };
     }
 
     /**
@@ -69,7 +88,7 @@ final readonly class OptionPayload
 
         foreach ($rows as $row) {
             $payloads[] = match (true) {
-                $row instanceof self => $row,
+                $row instanceof self => new self($row->key, self::columnValue($row->key, $row->value), $row->ownerType, $row->ownerId),
                 is_array($row) => self::fromArray($row),
                 default => throw InvalidOptionPayload::message('Each option row must be an array or an OptionPayload.'),
             };

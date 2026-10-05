@@ -41,6 +41,10 @@ All notable changes to `options-for-laravel` are documented in this file. The fo
 - The config bridge no longer applies stored values while `config:cache` / `optimize` builds the
   config cache, which baked them — decrypted, for encrypted options — into
   `bootstrap/cache/config.php`, where a `forget()` could never undo them.
+- `import()` is all or nothing: a non-scalar `value` is refused up front with
+  `InvalidOptionPayload` (it used to surface as a `QueryException` after earlier rows had
+  committed, and `options:import` printed a stack trace), and the rows are written in one
+  transaction. `Options::fake()` refuses the same input.
 
 ## 1.0.0 - 2026-10-03
 

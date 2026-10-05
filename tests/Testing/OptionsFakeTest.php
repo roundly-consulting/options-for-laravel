@@ -8,6 +8,7 @@ use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\AssertionFailedError;
 use RoundlyConsulting\Options\DataTransferObjects\OptionPayload;
 use RoundlyConsulting\Options\Exceptions\InvalidOptionClassName;
+use RoundlyConsulting\Options\Exceptions\InvalidOptionPayload;
 use RoundlyConsulting\Options\Facades\Options;
 use RoundlyConsulting\Options\Option;
 use RoundlyConsulting\Options\OptionsManager;
@@ -327,12 +328,17 @@ it('observes keys registered after it was installed', function (): void {
     expect($seen)->toBe(['dark']);
 });
 
-it('returns an imported value it cannot cast as it was given', function (): void {
-    Options::fake();
+it('refuses a non-scalar imported value, like the real manager', function (): void {
+    // Regression (2026-10-05 chat review, C-8): the fake imported it and returned it as
+    // given, where the real import fails. This replaces a test that pinned the old behaviour.
+    $fake = Options::fake();
 
-    Options::import([['key' => 'status', 'value' => ['not' => 'a column value']]]);
+    expect(fn () => Options::import([['key' => 'status', 'value' => ['not' => 'a column value']]]))
+        ->toThrow(InvalidOptionPayload::class);
 
-    expect(Options::get(StatusOption::class))->toBe(['not' => 'a column value']);
+    $fake->assertNothingImported();
+
+    expect(Options::get(StatusOption::class))->toBe(Status::Inactive);
 });
 
 it('refuses has() and forget() on a plain OptionInterface, like the real manager', function (): void {

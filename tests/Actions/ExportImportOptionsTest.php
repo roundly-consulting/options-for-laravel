@@ -153,3 +153,59 @@ it('exposes payload as array', function (): void {
         ->and(OptionPayload::fromArray(['key' => 'k', 'owner_type' => 't', 'owner_id' => 12])->ownerId)->toBe(12)
         ->and(OptionPayload::fromArray(['key' => 'k', 'owner_type' => 't', 'owner_id' => ''])->ownerId)->toBeNull();
 });
+
+it('refuses a non-scalar value and imports nothing', function (): void {
+    // Regression (2026-10-05 chat review, C-8): the array value reached the database as a
+    // QueryException ("Array to string conversion") after the rows before it had committed,
+    // and the in-request memo kept serving the pre-import value.
+    Options::set(ThemeOption::class, 'light');
+    Options::get(ThemeOption::class);
+
+    expect(fn () => Options::import([
+        ['key' => 'theme', 'value' => 'dark'],
+        ['key' => 'b', 'value' => ['n' => 1]],
+    ]))->toThrow(InvalidOptionPayload::class, '[b]');
+
+    expect(Option::query()->where('key', 'theme')->value('value'))->toBe('light')
+        ->and(Option::query()->where('key', 'b')->exists())->toBeFalse()
+        ->and(Options::get(ThemeOption::class))->toBe('light');
+});
+
+it('refuses a non-scalar value handed to the raw action', function (): void {
+    app(ImportOptionsAction::class)->execute([new OptionPayload('theme', 'dark'), new OptionPayload('b', ['n' => 1])]);
+})->throws(InvalidOptionPayload::class);
+
+it('rolls the whole import back when a row fails to write', function (): void {
+    Options::set(ThemeOption::class, 'light');
+    Options::get(ThemeOption::class);
+
+    Option::saving(function (Option $option): void {
+        if ($option->key === 'locale') {
+            throw new RuntimeException('disk full');
+        }
+    });
+
+    expect(fn () => Options::import([
+        ['key' => 'theme', 'value' => 'dark'],
+        ['key' => 'locale', 'value' => 'sk'],
+    ]))->toThrow(RuntimeException::class, 'disk full');
+
+    expect(Option::query()->where('key', 'theme')->value('value'))->toBe('light')
+        ->and(Options::get(ThemeOption::class))->toBe('light');
+
+    app()->forgetInstance(Cache::class);
+
+    expect(Options::get(ThemeOption::class))->toBe('light');
+});
+
+it('imports scalars as the column strings the database holds', function (): void {
+    Options::import([
+        ['key' => 'age', 'value' => 30],
+        ['key' => 'flag', 'value' => true],
+        ['key' => 'ratio', 'value' => 1.5],
+        ['key' => 'empty', 'value' => null],
+    ]);
+
+    expect(Option::query()->orderBy('id')->pluck('value', 'key')->all())
+        ->toBe(['age' => '30', 'flag' => '1', 'ratio' => '1.5', 'empty' => null]);
+});

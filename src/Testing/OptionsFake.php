@@ -81,7 +81,7 @@ final class OptionsFake extends OptionsManager
 
         $stored = $this->store[$this->scope($owner)][$key];
 
-        // Imported rows can carry anything; only a column-shaped value is cast.
+        // A plain OptionInterface's value is kept as given; only a column string is cast.
         return $instance instanceof BaseOption && (is_string($stored) || $stored === null)
             ? $instance->castStoredValue($stored)
             : $stored;
