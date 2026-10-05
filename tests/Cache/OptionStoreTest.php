@@ -2,9 +2,11 @@
 
 declare(strict_types=1);
 
+use Illuminate\Cache\Events\CacheMissed;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\Cache as CacheFacade;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use RoundlyConsulting\Options\Facades\Options;
 use RoundlyConsulting\Options\Option;
 use RoundlyConsulting\Options\Support\Cache;
@@ -209,4 +211,50 @@ it('does not re-cache a value read before a concurrent import', function (): voi
         ->and(Options::get(ThemeOption::class))->toBe('dark')
         ->and(Options::get(FlagOption::class))->toBeTrue()
         ->and(DB::getQueryLog())->toBe([]);
+});
+
+it('lands a write where fresh requests read, after the generation split', function (): void {
+    // Regression (2026-10-05 chat review, C-3): with the generation key missing, two
+    // requests minted different generations and the last one stored won. A write in the
+    // losing request went under its own, memoised generation — where nobody reads — so the
+    // winner's cached old value kept being served.
+    Options::set(ThemeOption::class, 'light');
+    Options::flushCache();
+    $requestA = new Cache;
+    $requestB = new Cache;
+
+    CacheFacade::forget('options:generation');
+    app()->instance(Cache::class, $requestA);
+    Options::get(ThemeOption::class);
+
+    // B read the key before A's mint landed: it mints its own, which is stored last.
+    CacheFacade::forget('options:generation');
+    app()->instance(Cache::class, $requestB);
+    Options::get(ThemeOption::class);
+
+    app()->instance(Cache::class, $requestA);
+    Options::set(ThemeOption::class, 'dark');
+
+    app()->instance(Cache::class, new Cache);
+
+    expect(Options::get(ThemeOption::class))->toBe('dark');
+});
+
+it('adopts a generation another request minted first', function (): void {
+    Options::set(ThemeOption::class, 'light');
+    Options::flushCache();
+    CacheFacade::forget('options:generation');
+
+    // Another request mints between this one's miss on the key and its own mint.
+    Event::listen(CacheMissed::class, function (CacheMissed $event): void {
+        if ($event->key === 'options:generation') {
+            CacheFacade::forever('options:generation', 'minted-elsewhere');
+        }
+    });
+
+    Options::get(ThemeOption::class);
+
+    expect(CacheFacade::get('options:generation'))->toBe('minted-elsewhere')
+        ->and(CacheFacade::tags('options')->get('options:minted-elsewhere:'.OptionStore::fingerprint('theme')))
+        ->toBe(['exists' => true, 'raw' => 'light']);
 });

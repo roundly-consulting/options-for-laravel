@@ -32,6 +32,10 @@ All notable changes to `options-for-laravel` are documented in this file. The fo
 - A read that raced a concurrent write, forget or import no longer caches the old value over
   the new one: reads fill the persistent cache only if it is empty (`add()`), and a forget or
   import puts its result instead of just dropping the entry.
+- After the cache generation key went missing (`cache:clear`, an eviction), concurrent requests
+  no longer split onto different generations with writes landing where no request reads: the
+  generation is minted with `add()` and read back, and writes go under the generation the store
+  holds now.
 
 ## 1.0.0 - 2026-10-03
 

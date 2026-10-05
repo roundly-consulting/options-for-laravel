@@ -85,7 +85,11 @@ final class OptionStore
             return;
         }
 
-        $this->putValue($this->repository(), $this->cacheKey($fingerprint), $value);
+        $repository = $this->repository();
+
+        foreach ($this->writeKeys($fingerprint) as $cacheKey) {
+            $this->putValue($repository, $cacheKey, $value);
+        }
     }
 
     public function forget(string $fingerprint): void
@@ -94,7 +98,11 @@ final class OptionStore
             return;
         }
 
-        $this->repository()->forget($this->cacheKey($fingerprint));
+        $repository = $this->repository();
+
+        foreach ($this->writeKeys($fingerprint) as $cacheKey) {
+            $repository->forget($cacheKey);
+        }
     }
 
     /**
@@ -158,9 +166,35 @@ final class OptionStore
         return $store instanceof TaggableStore;
     }
 
+    /**
+     * The key a read uses: under this request's memoised generation.
+     */
     private function cacheKey(string $fingerprint): string
     {
-        return $this->prefix().':'.$this->generation().':'.$fingerprint;
+        return $this->keyFor($this->generation(), $fingerprint);
+    }
+
+    /**
+     * The keys a write must reach: under the generation the store holds now —
+     * the one every fresh request reads — and under this request's memoised
+     * one, should another process have moved on since this request began.
+     *
+     * @return list<string>
+     */
+    private function writeKeys(string $fingerprint): array
+    {
+        $memoised = $this->generation();
+        $current = $this->currentGeneration($this->baseRepository());
+
+        return array_values(array_unique([
+            $this->keyFor($current, $fingerprint),
+            $this->keyFor($memoised, $fingerprint),
+        ]));
+    }
+
+    private function keyFor(string $generation, string $fingerprint): string
+    {
+        return $this->prefix().':'.$generation.':'.$fingerprint;
     }
 
     /**
@@ -169,26 +203,38 @@ final class OptionStore
      */
     private function generation(): string
     {
-        return app(Cache::class)->generation(function (): string {
-            $repository = $this->baseRepository();
-            $generation = $repository->get($this->generationKey());
-
-            return is_string($generation) && $generation !== ''
-                ? $generation
-                : $this->newGeneration($repository);
-        });
+        return app(Cache::class)->generation(fn (): string => $this->currentGeneration($this->baseRepository()));
     }
 
-    private function newGeneration(Repository $repository): string
+    /**
+     * The generation the store holds now. A missing key (first use, a cache
+     * clear, an eviction) is minted with add() and read back, so requests that
+     * find it missing at the same time adopt one generation — whichever landed
+     * first — instead of each keeping its own.
+     */
+    private function currentGeneration(Repository $repository): string
+    {
+        $generation = $repository->get($this->generationKey());
+
+        if (is_string($generation) && $generation !== '') {
+            return $generation;
+        }
+
+        $minted = Str::random(16);
+
+        $repository->add($this->generationKey(), $minted);
+
+        $generation = $repository->get($this->generationKey());
+
+        return is_string($generation) && $generation !== '' ? $generation : $minted;
+    }
+
+    private function newGeneration(Repository $repository): void
     {
         // Random rather than incremented: never reuses an older generation after
         // an eviction, and needs no atomic increment (the database store has none
         // for a missing key).
-        $generation = Str::random(16);
-
-        $repository->forever($this->generationKey(), $generation);
-
-        return $generation;
+        $repository->forever($this->generationKey(), Str::random(16));
     }
 
     private function generationKey(): string
