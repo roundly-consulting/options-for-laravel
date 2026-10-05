@@ -10,6 +10,8 @@ All notable changes to `options-for-laravel` are documented in this file. The fo
 
 - An `EnumCast` option refuses a value that is not one of its enum's cases (a misspelt string,
   another enum's case) with `InvalidOptionPayload`, instead of storing it and reading back `null`.
+- `make:option` escapes a `--key` or `--cast` containing a quote or backslash, so the generated
+  class parses.
 
 ## 1.0.0 - 2026-10-03
 

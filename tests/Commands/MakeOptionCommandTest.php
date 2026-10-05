@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\File;
+use Symfony\Component\Process\Process;
 
 /*
  * The generator writes into app/Options: a throwaway app/ per test, never the shared testbench
@@ -68,4 +69,26 @@ it('generates an enum option', function (): void {
         ->toContain('use App\\Enums\\Status;')
         ->toContain('EnumCast::class')
         ->toContain('Status::class');
+});
+
+it('escapes quotes in the key and cast it writes into the class', function (): void {
+    // Regression (2026-10-05 chat review, C-14): `--key="user's_theme"` was substituted raw
+    // into a single-quoted string, so the generated class was a parse error.
+    $class = 'QuotedOption'.bin2hex(random_bytes(4));
+
+    $this->artisan('make:option', ['name' => $class, '--key' => "user's_theme\\", '--cast' => "it's"])
+        ->assertSuccessful();
+
+    $path = $this->target.'/'.$class.'.php';
+    $lint = new Process([PHP_BINARY, '-l', $path]);
+    $lint->run();
+
+    expect($lint->getExitCode())->toBe(0, $lint->getOutput().$lint->getErrorOutput());
+
+    require $path;
+
+    $option = new ('App\\Options\\'.$class);
+
+    expect($option->key())->toBe("user's_theme\\")
+        ->and($option->castAs())->toBe("it's");
 });

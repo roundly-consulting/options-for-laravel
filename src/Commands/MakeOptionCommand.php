@@ -45,8 +45,9 @@ final class MakeOptionCommand extends GeneratorCommand
         $cast = $this->option('cast');
         $cast = is_string($cast) && $cast !== '' ? $cast : 'string';
 
-        $stub = str_replace(['{{ key }}', '{{key}}'], $key, $stub);
-        $stub = str_replace(['{{ cast }}', '{{cast}}'], $cast, $stub);
+        // Both land inside single-quoted PHP strings in the stub.
+        $stub = str_replace(['{{ key }}', '{{key}}'], addcslashes($key, "'\\"), $stub);
+        $stub = str_replace(['{{ cast }}', '{{cast}}'], addcslashes($cast, "'\\"), $stub);
 
         $enum = $this->option('enum');
         $enumClass = is_string($enum) ? $enum : '';
