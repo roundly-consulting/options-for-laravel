@@ -56,7 +56,7 @@ final class ThemeOption extends BaseOption
 
     public function rules(): array|string
     {
-        return ['in:light,dark'];
+        return ['required', 'in:light,dark'];
     }
 }
 ```

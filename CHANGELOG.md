@@ -17,6 +17,8 @@ All notable changes to `options-for-laravel` are documented in this file. The fo
   `export` report an unknown `--owner-id`, as a failed command instead of a stack trace.
 - `Options::fake()` throws `InvalidOptionClassName` from `has()` / `forget()` for an option that
   is not a `BaseOption`, as the real manager does.
+- The README's example option adds `required` to its rules: Laravel skips `in:` for a blank
+  string, so the documented option stored `''`.
 
 ## 1.0.0 - 2026-10-03
 
