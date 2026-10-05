@@ -8,6 +8,7 @@ use BackedEnum;
 use Illuminate\Contracts\Database\Eloquent\CastsAttributes;
 use Illuminate\Database\Eloquent\Model;
 use ReflectionEnum;
+use RoundlyConsulting\Options\Exceptions\InvalidOptionPayload;
 
 /**
  * Generic backed-enum cast. Pass the enum class as a cast parameter, e.g.
@@ -42,7 +43,13 @@ final class EnumCast implements CastsAttributes
     }
 
     /**
+     * Stores a case's backing value. Anything that is not a case of this enum —
+     * a misspelt string, another enum's case — is refused rather than stored,
+     * since a read could only turn it into `null`.
+     *
      * @param  array<string, mixed>  $attributes
+     *
+     * @throws InvalidOptionPayload
      */
     public function set(Model $model, string $key, mixed $value, array $attributes): int|string|null
     {
@@ -51,10 +58,28 @@ final class EnumCast implements CastsAttributes
         }
 
         if ($value instanceof BackedEnum) {
-            return $value->value;
+            return $value instanceof $this->enum ? $value->value : throw $this->notACase($value);
         }
 
-        return is_int($value) ? $value : (string) $value;
+        $backing = $this->backingValue($value);
+        $case = $backing === null ? null : ($this->enum)::tryFrom($backing);
+
+        if ($case === null) {
+            throw $this->notACase($value);
+        }
+
+        return $case->value;
+    }
+
+    private function notACase(mixed $value): InvalidOptionPayload
+    {
+        $shown = match (true) {
+            $value instanceof BackedEnum => $value::class.'::'.$value->name,
+            is_scalar($value) => (string) $value,
+            default => get_debug_type($value),
+        };
+
+        return InvalidOptionPayload::message("[{$shown}] is not a case of [{$this->enum}].");
     }
 
     /**

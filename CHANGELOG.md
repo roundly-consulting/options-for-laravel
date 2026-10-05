@@ -6,6 +6,11 @@ All notable changes to `options-for-laravel` are documented in this file. The fo
 
 ## Unreleased
 
+### Fixed
+
+- An `EnumCast` option refuses a value that is not one of its enum's cases (a misspelt string,
+  another enum's case) with `InvalidOptionPayload`, instead of storing it and reading back `null`.
+
 ## 1.0.0 - 2026-10-03
 
 Initial public release.

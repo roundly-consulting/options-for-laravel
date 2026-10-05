@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use RoundlyConsulting\Options\Casts\EnumCast;
+use RoundlyConsulting\Options\Exceptions\InvalidOptionPayload;
 use RoundlyConsulting\Options\Facades\Options;
 use RoundlyConsulting\Options\Option;
 use RoundlyConsulting\Options\Support\Cache;
@@ -80,3 +81,32 @@ it('stringifies int values for string-backed enums', function (): void {
 
     expect($cast->get(new Option, 'value', 5, []))->toBeNull();
 });
+
+it('refuses to store a value that is not one of its cases', function (mixed $value): void {
+    // Regression (2026-10-05 chat review, C-7): set() stored any string or another enum's
+    // case, and get() then returned null instead of a case or the default.
+    expect(fn () => Options::set(StatusOption::class, $value))->toThrow(InvalidOptionPayload::class);
+
+    Options::flushCache();
+
+    expect(Option::query()->count())->toBe(0)
+        ->and(Options::get(StatusOption::class))->toBe(Status::Inactive);
+})->with([
+    'a misspelt case' => ['archvied'],
+    'a case of another enum' => [Priority::High],
+    'an empty string' => [''],
+    'a non-scalar' => [['active']],
+]);
+
+it('still stores a case given as the enum or as its backing value', function (mixed $value, BackedEnum $case): void {
+    Options::set($case instanceof Priority ? PriorityOption::class : StatusOption::class, $value);
+
+    Options::flushCache();
+
+    expect(Options::get($case instanceof Priority ? PriorityOption::class : StatusOption::class))->toBe($case);
+})->with([
+    'a string case' => ['active', Status::Active],
+    'a string-backed case' => [Status::Active, Status::Active],
+    'an int backing value' => [2, Priority::High],
+    'a numeric string for an int-backed enum' => ['1', Priority::Low],
+]);
