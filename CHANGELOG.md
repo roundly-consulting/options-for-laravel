@@ -25,6 +25,10 @@ All notable changes to `options-for-laravel` are documented in this file. The fo
 - Observers (`Options::observe()`) and the live config bridge (`config_overrides_live`) run on
   every write, also with `options.events.enabled` off or the option events faked — they were
   event listeners, while `Options::fake()` always fired observers.
+- A write inside a transaction caches its value for other processes, fires `OptionSet` /
+  `OptionForgotten`, calls observers and re-applies live config overrides only after the commit,
+  and not at all when it rolls back. Other processes were served the rolled-back value for the
+  whole cache TTL.
 
 ## 1.0.0 - 2026-10-03
 

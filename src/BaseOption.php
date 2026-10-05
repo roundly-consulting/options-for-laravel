@@ -217,11 +217,17 @@ abstract class BaseOption implements OptionInterface
         $this->persist($stored->raw);
 
         // Cache what a read of the row returns, so the next get() runs the cast
-        // and yields the same type it would after the cache expires.
+        // and yields the same type it would after the cache expires. This request
+        // reads its own write at once (inside a transaction too, as the database
+        // shows it); other processes and the rest of the app only once it commits.
         app(Cache::class)->put($this->fingerprint(), $stored);
-        $this->store()->put($this->fingerprint(), $stored);
+        $this->store()->forget($this->fingerprint());
 
-        $this->announce(OptionChangeType::Set, $this->hydrate($stored));
+        $this->afterCommit(function () use ($stored): void {
+            $this->store()->put($this->fingerprint(), $stored);
+
+            $this->announce(OptionChangeType::Set, $this->hydrate($stored));
+        });
     }
 
     /**
@@ -293,9 +299,27 @@ abstract class BaseOption implements OptionInterface
             ->get()
             ->each(fn (Option $option) => $option->delete());
 
-        $this->forgetCachedValue();
+        app(Cache::class)->put($this->fingerprint(), StoredValue::missing());
+        $this->store()->forget($this->fingerprint());
 
-        $this->announce(OptionChangeType::Forgotten, null);
+        $this->afterCommit(fn () => $this->announce(OptionChangeType::Forgotten, null));
+    }
+
+    /**
+     * Run the callback once the write is durable: right away outside a
+     * transaction, after the outermost commit inside one, never on rollback.
+     */
+    private function afterCommit(Closure $callback): void
+    {
+        $connection = $this->castingModel()->getConnection();
+
+        if ($connection->transactionLevel() === 0) {
+            $callback();
+
+            return;
+        }
+
+        $connection->afterCommit($callback);
     }
 
     /**
