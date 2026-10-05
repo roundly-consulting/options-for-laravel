@@ -31,7 +31,11 @@ final class ExportOptionsCommand extends Command
             return self::FAILURE;
         }
 
-        $json = $options->exportJson($owner);
+        // System code, like the other commands: authorization does not apply.
+        $json = '';
+        $options->withoutAuthorization(function () use ($options, $owner, &$json): void {
+            $json = $options->exportJson($owner);
+        });
 
         /** @var string|null $path */
         $path = $this->option('path');

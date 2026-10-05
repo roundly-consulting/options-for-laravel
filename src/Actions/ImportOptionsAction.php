@@ -6,7 +6,9 @@ namespace RoundlyConsulting\Options\Actions;
 
 use RoundlyConsulting\Options\DataTransferObjects\OptionPayload;
 use RoundlyConsulting\Options\Exceptions\InvalidOptionPayload;
+use RoundlyConsulting\Options\Exceptions\UnauthorizedOption;
 use RoundlyConsulting\Options\Support\Cache;
+use RoundlyConsulting\Options\Support\OptionAuthorizer;
 use RoundlyConsulting\Options\Support\OptionModel;
 use RoundlyConsulting\Options\Support\OptionStore;
 use RoundlyConsulting\Options\Support\StoredValue;
@@ -18,18 +20,25 @@ use Throwable;
  */
 final readonly class ImportOptionsAction
 {
-    public function __construct(private OptionStore $store) {}
+    public function __construct(
+        private OptionStore $store,
+        private OptionAuthorizer $authorizer,
+    ) {}
 
     /**
-     * All or nothing: every value is checked before the first write, and the
-     * writes share a transaction.
+     * All or nothing: every row is authorized (when enforcement is on) and
+     * every value checked before the first write, and the writes share a
+     * transaction.
      *
      * @param  list<OptionPayload>  $payloads
      *
      * @throws InvalidOptionPayload
+     * @throws UnauthorizedOption
      */
     public function execute(array $payloads): int
     {
+        $this->authorizer->authorizeImport($payloads);
+
         $rows = array_map(
             static fn (OptionPayload $payload): array => [$payload, OptionPayload::columnValue($payload->key, $payload->value)],
             $payloads,

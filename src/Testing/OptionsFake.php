@@ -136,7 +136,8 @@ final class OptionsFake extends OptionsManager
     }
 
     /**
-     * The in-memory values as payloads, with the real export's scoping rules.
+     * The in-memory values as payloads, with the real export's scoping and
+     * authorization rules.
      *
      * @return list<OptionPayload>
      */
@@ -156,17 +157,19 @@ final class OptionsFake extends OptionsManager
             }
         }
 
-        return $payloads;
+        return app(OptionAuthorizer::class)->readablePayloads($payloads);
     }
 
     /**
-     * Record the payloads and load them into the in-memory store.
+     * Authorize, record and load the payloads into the in-memory store.
      *
      * @param  array<mixed>|string  $payload
      */
     public function import(array|string $payload): int
     {
         $payloads = $this->payloads($payload);
+
+        app(OptionAuthorizer::class)->authorizeImport($payloads);
 
         foreach ($payloads as $row) {
             $this->put($row->key, $row->value, $row->ownerType, $row->ownerId);

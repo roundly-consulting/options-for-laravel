@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Support\Facades\File;
 use RoundlyConsulting\Options\Facades\Options;
 use RoundlyConsulting\Options\Tests\Models\User;
 use RoundlyConsulting\Options\Tests\Options\AdminOnlyOption;
@@ -61,4 +62,25 @@ it('bypasses authorization by default in the list command', function (): void {
     $this->artisan('options:list')
         ->expectsOutputToContain('secret-admin-value')
         ->assertSuccessful();
+});
+
+it('bypasses authorization in the export and import commands', function (): void {
+    // C-6: export()/import() enforce authorization now; the commands are system code.
+    Options::withoutAuthorization(fn () => Options::set(AdminOnlyOption::class, 'secret-admin-value'));
+    Options::register(['admin-only' => AdminOnlyOption::class]);
+    $path = sys_get_temp_dir().'/options-auth-export-'.bin2hex(random_bytes(6)).'.json';
+
+    try {
+        $this->artisan('options:export')
+            ->expectsOutputToContain('secret-admin-value')
+            ->assertSuccessful();
+
+        File::put($path, json_encode([['key' => 'admin-only', 'value' => 'from-cli']]));
+
+        $this->artisan('options:import', ['path' => $path])->assertSuccessful();
+    } finally {
+        File::delete($path);
+    }
+
+    expect(Options::withoutAuthorization(fn () => Options::get(AdminOnlyOption::class)))->toBe('from-cli');
 });

@@ -27,7 +27,11 @@ final class ImportOptionsCommand extends Command
         }
 
         try {
-            $count = $options->import(File::get($path));
+            // System code, like the other commands: authorization does not apply.
+            $count = 0;
+            $options->withoutAuthorization(function () use ($options, $path, &$count): void {
+                $count = $options->import(File::get($path));
+            });
         } catch (OptionException $exception) {
             $this->error($exception->getMessage());
 

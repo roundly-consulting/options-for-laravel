@@ -389,6 +389,22 @@ class OptionsManager
     }
 
     /**
+     * @internal the registered option class whose `key()` is the given stored key, if any
+     *
+     * @return class-string<OptionInterface>|null
+     */
+    public function classForKey(string $key): ?string
+    {
+        foreach ($this->registered() as $class) {
+            if ($class::for(null)->key() === $key) {
+                return $class;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Resolve to a BaseOption so the extended state operations are available.
      */
     protected function resolveOption(string $option, ?Model $owner = null): BaseOption

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Gate;
+use RoundlyConsulting\Options\DataTransferObjects\OptionPayload;
 use RoundlyConsulting\Options\Exceptions\UnauthorizedOption;
 use RoundlyConsulting\Options\Facades\Options;
 use RoundlyConsulting\Options\Option;
@@ -189,4 +190,85 @@ it('leaves out of the fake all() what the current user may not read', function (
     config()->set('options.authorization.enabled', true);
 
     expect($fake->all()->all())->toBe(['theme' => 'dark']);
+});
+
+describe('export and import under enforcement', function (): void {
+    // Regression (2026-10-05 chat review, C-6): export() / exportJson() included options the
+    // current user may not read (all() leaves them out), and import() wrote options the user
+    // may not write.
+    beforeEach(function (): void {
+        Options::withoutAuthorization(function (): void {
+            Options::set(AdminOnlyOption::class, 'secret-admin-value');
+            Options::set(ThemeOption::class, 'dark');
+        });
+        Option::query()->create(['key' => 'unknown-key', 'value' => 'orphan']);
+        Options::register(['admin' => AdminOnlyOption::class, 'theme' => ThemeOption::class]);
+
+        config()->set('options.authorization.enabled', true);
+    });
+
+    it('leaves out of every export what the current user may not read', function (): void {
+        $keys = static fn (array $payloads): array => array_map(static fn (OptionPayload $payload): string => $payload->key, $payloads);
+
+        expect($keys(Options::export()))->toBe(['theme'])
+            ->and($keys(Options::for(null)->export()))->toBe(['theme'])
+            ->and(array_column(json_decode(Options::exportJson(), true), 'key'))->toBe(['theme'])
+            ->and($keys(Options::actingAs(User::query()->create(), fn () => Options::export())))->toBe(['admin-only', 'theme'])
+            ->and(Options::withoutAuthorization(fn () => count(Options::export())))->toBe(3);
+    });
+
+    it('checks an owned row against its owner', function (): void {
+        $owner = User::query()->create();
+        Options::withoutAuthorization(fn () => Options::set(AdminOnlyOption::class, 'owned', $owner));
+
+        $user = User::query()->create();
+
+        expect(Options::export($owner))->toBe([])
+            ->and(Options::actingAs($user, fn () => Options::export($owner)[0]->value))->toBe('owned')
+            ->and(AdminOnlyOption::$lastArgs['owner']?->is($owner))->toBeTrue();
+    });
+
+    it('refuses to import an option the current user may not write', function (): void {
+        expect(fn () => Options::import([
+            ['key' => 'theme', 'value' => 'blue'],
+            ['key' => 'admin-only', 'value' => 'hacked'],
+        ]))->toThrow(UnauthorizedOption::class, 'admin-only');
+
+        expect(Options::withoutAuthorization(fn () => Options::get(AdminOnlyOption::class)))->toBe('secret-admin-value')
+            ->and(Options::get(ThemeOption::class))->toBe('dark');
+    });
+
+    it('refuses to import a key no registered option answers for', function (): void {
+        Options::import([['key' => 'unknown-key', 'value' => 'changed']]);
+    })->throws(UnauthorizedOption::class, 'unknown-key');
+
+    it('refuses to import an owned row whose owner does not exist', function (): void {
+        Options::import([['key' => 'theme', 'value' => 'blue', 'owner_type' => (new User)->getMorphClass(), 'owner_id' => 999]]);
+    })->throws(UnauthorizedOption::class, 'theme');
+
+    it('imports what the current user may write', function (): void {
+        $user = User::query()->create();
+
+        Options::actingAs($user, fn () => Options::import([
+            ['key' => 'admin-only', 'value' => 'by-admin'],
+            ['key' => 'theme', 'value' => 'blue', 'owner_type' => $user->getMorphClass(), 'owner_id' => $user->getKey()],
+        ]));
+
+        expect(Options::actingAs($user, fn () => Options::get(AdminOnlyOption::class)))->toBe('by-admin')
+            ->and(Options::get(ThemeOption::class, $user))->toBe('blue');
+    });
+
+    it('filters and refuses the same way under the fake', function (): void {
+        $fake = Options::fake();
+        Options::register(['admin' => AdminOnlyOption::class, 'theme' => ThemeOption::class]);
+        Options::withoutAuthorization(function (): void {
+            Options::set(AdminOnlyOption::class, 'secret-admin-value');
+            Options::set(ThemeOption::class, 'dark');
+        });
+
+        expect(array_map(static fn (OptionPayload $payload): string => $payload->key, Options::export()))->toBe(['theme'])
+            ->and(fn () => Options::import([['key' => 'admin-only', 'value' => 'hacked']]))->toThrow(UnauthorizedOption::class);
+
+        $fake->assertNothingImported();
+    });
 });

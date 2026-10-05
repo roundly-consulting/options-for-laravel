@@ -45,6 +45,11 @@ All notable changes to `options-for-laravel` are documented in this file. The fo
   `InvalidOptionPayload` (it used to surface as a `QueryException` after earlier rows had
   committed, and `options:import` printed a stack trace), and the rows are written in one
   transaction. `Options::fake()` refuses the same input.
+- With `options.authorization` enabled, `export()` / `exportJson()` leave out options the current
+  user may not read (and unregistered keys, as `all()` does), and `import()` refuses rows the user
+  may not write with `UnauthorizedOption`, importing nothing. The `options:export` /
+  `options:import` commands bypass authorization like the other commands; the fake enforces the
+  same rules.
 
 ## 1.0.0 - 2026-10-03
 
