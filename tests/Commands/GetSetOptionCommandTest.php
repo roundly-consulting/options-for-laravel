@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use RoundlyConsulting\Options\Facades\Options;
+use RoundlyConsulting\Options\Option;
 use RoundlyConsulting\Options\Support\Cache;
 use RoundlyConsulting\Options\Tests\Models\User;
 use RoundlyConsulting\Options\Tests\Options\ArrayOption;
@@ -104,4 +105,16 @@ it('prints a numeric value', function (): void {
     $this->artisan('options:get', ['option' => FlagOption::class])
         ->expectsOutput('true')
         ->assertSuccessful();
+});
+
+it('refuses invalid json when --json is given', function (): void {
+    // Regression (2026-10-05 chat review, C-13): the raw string was stored and the
+    // command exited 0.
+    $this->artisan('options:set', [
+        'option' => ArrayOption::class,
+        'value' => '{"beta":true',
+        '--json' => true,
+    ])->expectsOutputToContain('not valid JSON')->assertFailed();
+
+    expect(Option::query()->count())->toBe(0);
 });

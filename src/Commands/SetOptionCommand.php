@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 use JsonException;
 use RoundlyConsulting\Options\Commands\Concerns\ActsAsUser;
 use RoundlyConsulting\Options\Commands\Concerns\ResolvesOwner;
+use RoundlyConsulting\Options\Exceptions\InvalidOptionPayload;
 use RoundlyConsulting\Options\Exceptions\OptionException;
 use RoundlyConsulting\Options\OptionsManager;
 
@@ -56,8 +57,8 @@ final class SetOptionCommand extends Command
 
         try {
             return json_decode($value, true, 512, JSON_THROW_ON_ERROR);
-        } catch (JsonException) {
-            return $value;
+        } catch (JsonException $exception) {
+            throw InvalidOptionPayload::message('The value is not valid JSON: '.$exception->getMessage());
         }
     }
 }

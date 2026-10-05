@@ -12,6 +12,7 @@ All notable changes to `options-for-laravel` are documented in this file. The fo
   another enum's case) with `InvalidOptionPayload`, instead of storing it and reading back `null`.
 - `make:option` escapes a `--key` or `--cast` containing a quote or backslash, so the generated
   class parses.
+- `options:set --json` with invalid JSON fails with a message instead of storing the raw string.
 
 ## 1.0.0 - 2026-10-03
 
