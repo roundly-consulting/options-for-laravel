@@ -38,6 +38,9 @@ All notable changes to `options-for-laravel` are documented in this file. The fo
   holds now.
 - `remember()` stores only if nothing is stored by then, so two concurrent first callers both
   return the one stored value; one used to return a value that was then overwritten.
+- The config bridge no longer applies stored values while `config:cache` / `optimize` builds the
+  config cache, which baked them — decrypted, for encrypted options — into
+  `bootstrap/cache/config.php`, where a `forget()` could never undo them.
 
 ## 1.0.0 - 2026-10-03
 

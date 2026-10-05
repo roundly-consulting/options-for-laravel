@@ -7,9 +7,11 @@ use Illuminate\Support\Facades\Schema;
 use RoundlyConsulting\Options\Events\OptionForgotten;
 use RoundlyConsulting\Options\Events\OptionSet;
 use RoundlyConsulting\Options\Facades\Options;
+use RoundlyConsulting\Options\OptionsServiceProvider;
 use RoundlyConsulting\Options\Support\ConfigBridge;
 use RoundlyConsulting\Options\Tests\Options\AdminOnlyOption;
 use RoundlyConsulting\Options\Tests\Options\MailFromOption;
+use RoundlyConsulting\Options\Tests\Options\SecretOption;
 use RoundlyConsulting\Options\Tests\Options\ThemeOption;
 
 beforeEach(function (): void {
@@ -154,3 +156,47 @@ it('syncs live overrides whether or not events run', function (Closure $silenceE
     // would also fake the Option model's own saving hook.
     'Event::fake() of the option events' => [fn () => Event::fake([OptionSet::class, OptionForgotten::class])],
 ]);
+
+/**
+ * Boot the provider again, as the given artisan command would.
+ */
+function bootOptionsProviderAs(string $command): void
+{
+    $argv = $_SERVER['argv'];
+    $_SERVER['argv'] = ['artisan', $command];
+
+    try {
+        app()->register(OptionsServiceProvider::class, force: true);
+    } finally {
+        $_SERVER['argv'] = $argv;
+    }
+}
+
+it('keeps stored values out of the config cache build', function (string $command): void {
+    // Regression (2026-10-05 chat review, C-5): config:cache boots the providers and dumps
+    // config(), so mapped values — decrypted, for an encrypted option — were baked into
+    // bootstrap/cache/config.php, and a forget() could never bring the file value back.
+    Options::set(MailFromOption::class, 'db@test');
+    Options::set(SecretOption::class, 's3cr3t-plaintext');
+    config()->set('mail.from.address', 'file@test');
+    config()->set('services.c5.secret', 'file-secret');
+    config()->set('options.config_overrides', [
+        'mail.from.address' => MailFromOption::class,
+        'services.c5.secret' => SecretOption::class,
+    ]);
+
+    bootOptionsProviderAs($command);
+
+    expect(config('mail.from.address'))->toBe('file@test')
+        ->and(config('services.c5.secret'))->toBe('file-secret');
+})->with(['config:cache', 'optimize']);
+
+it('applies stored values when booted for any other command', function (): void {
+    Options::set(MailFromOption::class, 'db@test');
+    config()->set('mail.from.address', 'file@test');
+    config()->set('options.config_overrides', ['mail.from.address' => MailFromOption::class]);
+
+    bootOptionsProviderAs('queue:work');
+
+    expect(config('mail.from.address'))->toBe('db@test');
+});

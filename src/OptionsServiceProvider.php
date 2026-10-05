@@ -121,6 +121,14 @@ final class OptionsServiceProvider extends PackageServiceProvider
 
         $bridge->seedFromConfig($map);
 
+        // `config:cache` (also run by `optimize`) boots the app and dumps config():
+        // a stored value applied now would be baked into the cache file — decrypted,
+        // for an encrypted option — and outlive a forget(). The file keeps the file
+        // values; every later boot applies the stored ones on top.
+        if ($this->app->runningConsoleCommand('config:cache', 'optimize')) {
+            return;
+        }
+
         // Live re-sync on set/forget is called by the write path itself (BaseOption),
         // not through an event listener, so it runs with events off too.
         if ($bridge->hasMappings()) {
