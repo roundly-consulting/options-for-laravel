@@ -22,6 +22,9 @@ All notable changes to `options-for-laravel` are documented in this file. The fo
 - On MySQL, two concurrent first writes of an option inside a transaction (`setMany()`, a group
   `set()`, a host transaction) no longer fail with a duplicate-key error: the loser re-reads the
   winner's row with a locking read and updates it.
+- Observers (`Options::observe()`) and the live config bridge (`config_overrides_live`) run on
+  every write, also with `options.events.enabled` off or the option events faked — they were
+  event listeners, while `Options::fake()` always fired observers.
 
 ## 1.0.0 - 2026-10-03
 

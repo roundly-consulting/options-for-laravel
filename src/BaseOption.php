@@ -12,13 +12,16 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Validator;
 use RoundlyConsulting\Options\Casts\EncryptedCast;
+use RoundlyConsulting\Options\Enums\OptionChangeType;
 use RoundlyConsulting\Options\Events\OptionForgotten;
 use RoundlyConsulting\Options\Events\OptionResolved;
 use RoundlyConsulting\Options\Events\OptionSet;
 use RoundlyConsulting\Options\Exceptions\EncryptionNotSupported;
 use RoundlyConsulting\Options\Support\Cache;
+use RoundlyConsulting\Options\Support\ConfigBridge;
 use RoundlyConsulting\Options\Support\OptionAuthorizer;
 use RoundlyConsulting\Options\Support\OptionModel;
+use RoundlyConsulting\Options\Support\OptionObservers;
 use RoundlyConsulting\Options\Support\OptionStore;
 use RoundlyConsulting\Options\Support\StoredValue;
 use RoundlyConsulting\Options\Support\ValueCaster;
@@ -218,9 +221,7 @@ abstract class BaseOption implements OptionInterface
         app(Cache::class)->put($this->fingerprint(), $stored);
         $this->store()->put($this->fingerprint(), $stored);
 
-        if ($this->eventsEnabled()) {
-            OptionSet::dispatch($this->key(), $this->hydrate($stored), $this->owner);
-        }
+        $this->announce(OptionChangeType::Set, $this->hydrate($stored));
     }
 
     /**
@@ -294,9 +295,29 @@ abstract class BaseOption implements OptionInterface
 
         $this->forgetCachedValue();
 
-        if ($this->eventsEnabled()) {
-            OptionForgotten::dispatch($this->key(), $this->owner);
+        $this->announce(OptionChangeType::Forgotten, null);
+    }
+
+    /**
+     * Tell the rest of the app about a change: the option's observers and the
+     * live config bridge always, the `OptionSet` / `OptionForgotten` events
+     * when enabled. Observers and the bridge are called directly, so turning
+     * events off — or a host test's `Event::fake()` — does not silence them.
+     */
+    private function announce(OptionChangeType $type, mixed $value): void
+    {
+        app(OptionObservers::class)->dispatch($this->key(), $type, $value, $this->owner);
+
+        rescue(fn () => app(ConfigBridge::class)->syncOptionKey($this->key()), report: false);
+
+        if (! $this->eventsEnabled()) {
+            return;
         }
+
+        match ($type) {
+            OptionChangeType::Set => OptionSet::dispatch($this->key(), $value, $this->owner),
+            OptionChangeType::Forgotten => OptionForgotten::dispatch($this->key(), $this->owner),
+        };
     }
 
     protected function guardRead(): void

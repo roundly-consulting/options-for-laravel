@@ -2,8 +2,11 @@
 
 declare(strict_types=1);
 
+use Illuminate\Support\Facades\Event;
 use RoundlyConsulting\Options\DataTransferObjects\OptionChange;
 use RoundlyConsulting\Options\Enums\OptionChangeType;
+use RoundlyConsulting\Options\Events\OptionForgotten;
+use RoundlyConsulting\Options\Events\OptionSet;
 use RoundlyConsulting\Options\Exceptions\InvalidOptionObserver;
 use RoundlyConsulting\Options\Facades\Options;
 use RoundlyConsulting\Options\Tests\Models\User;
@@ -145,18 +148,28 @@ it('does not fire observers on read', function (): void {
     expect($hits)->toBe(0);
 });
 
-it('does not fire event-driven observers when events are disabled', function (): void {
-    config()->set('options.events.enabled', false);
+it('fires observers whether or not events run', function (Closure $silenceEvents): void {
+    // Regression (2026-10-05 chat review, C-4): observers hung off the OptionSet /
+    // OptionForgotten listeners, so `options.events.enabled=false` or a host test's
+    // Event::fake() silently switched them off — while Options::fake() kept firing them.
+    // This replaces a test that pinned that behaviour.
+    $silenceEvents();
 
-    $hits = 0;
-    Options::observe(ThemeOption::class, function () use (&$hits): void {
-        $hits++;
+    $seen = [];
+    Options::observe(ThemeOption::class, function (mixed $value, $owner, OptionChange $change) use (&$seen): void {
+        $seen[] = $change->type->value.':'.var_export($value, true);
     });
 
     Options::set(ThemeOption::class, 'dark');
+    Options::forget(ThemeOption::class);
 
-    expect($hits)->toBe(0);
-});
+    expect($seen)->toBe(["set:'dark'", 'forgotten:NULL']);
+})->with([
+    'events disabled' => [fn () => config()->set('options.events.enabled', false)],
+    // A host test asserting the package's events fakes them; a blanket Event::fake()
+    // would also fake the Option model's own saving hook.
+    'Event::fake() of the option events' => [fn () => Event::fake([OptionSet::class, OptionForgotten::class])],
+]);
 
 it('still fires observers through the fake when events are disabled', function (): void {
     config()->set('options.events.enabled', false);

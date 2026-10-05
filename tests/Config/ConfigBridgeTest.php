@@ -2,7 +2,10 @@
 
 declare(strict_types=1);
 
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Schema;
+use RoundlyConsulting\Options\Events\OptionForgotten;
+use RoundlyConsulting\Options\Events\OptionSet;
 use RoundlyConsulting\Options\Facades\Options;
 use RoundlyConsulting\Options\Support\ConfigBridge;
 use RoundlyConsulting\Options\Tests\Options\AdminOnlyOption;
@@ -129,3 +132,25 @@ it('reads mapped options without authorization', function (): void {
 
     expect(config('custom.key'))->toBe('from-db');
 });
+
+it('syncs live overrides whether or not events run', function (Closure $silenceEvents): void {
+    // Regression (2026-10-05 chat review, C-4): the live sync was an OptionSet /
+    // OptionForgotten listener, so it stopped with events off or under Event::fake().
+    $silenceEvents();
+    config()->set('options.config_overrides_live', true);
+    config()->set('mail.from.address', 'original@test');
+    Options::overrides('mail.from.address', MailFromOption::class);
+
+    Options::set(MailFromOption::class, 'live@test');
+    $afterSet = config('mail.from.address');
+
+    Options::forget(MailFromOption::class);
+
+    expect($afterSet)->toBe('live@test')
+        ->and(config('mail.from.address'))->toBe('original@test');
+})->with([
+    'events disabled' => [fn () => config()->set('options.events.enabled', false)],
+    // A host test asserting the package's events fakes them; a blanket Event::fake()
+    // would also fake the Option model's own saving hook.
+    'Event::fake() of the option events' => [fn () => Event::fake([OptionSet::class, OptionForgotten::class])],
+]);

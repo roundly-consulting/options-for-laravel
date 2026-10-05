@@ -14,9 +14,6 @@ use RoundlyConsulting\Options\Commands\ListOptionsCommand;
 use RoundlyConsulting\Options\Commands\MakeOptionCommand;
 use RoundlyConsulting\Options\Commands\MakeOptionGroupCommand;
 use RoundlyConsulting\Options\Commands\SetOptionCommand;
-use RoundlyConsulting\Options\Enums\OptionChangeType;
-use RoundlyConsulting\Options\Events\OptionForgotten;
-use RoundlyConsulting\Options\Events\OptionSet;
 use RoundlyConsulting\Options\Support\Cache;
 use RoundlyConsulting\Options\Support\ConfigBridge;
 use RoundlyConsulting\Options\Support\OptionAuthorizer;
@@ -96,7 +93,6 @@ final class OptionsServiceProvider extends PackageServiceProvider
             fn (string $expression): string => "<?php echo e(options({$expression})); ?>",
         );
 
-        $this->registerObserverListeners();
         $this->resetMemoPerLifecycle();
         $this->bootConfigBridge();
     }
@@ -116,19 +112,6 @@ final class OptionsServiceProvider extends PackageServiceProvider
         );
     }
 
-    private function registerObserverListeners(): void
-    {
-        $observers = $this->app->make(OptionObservers::class);
-
-        Event::listen(OptionSet::class, function (OptionSet $event) use ($observers): void {
-            $observers->dispatch($event->key, OptionChangeType::Set, $event->value, $event->owner);
-        });
-
-        Event::listen(OptionForgotten::class, function (OptionForgotten $event) use ($observers): void {
-            $observers->dispatch($event->key, OptionChangeType::Forgotten, null, $event->owner);
-        });
-    }
-
     private function bootConfigBridge(): void
     {
         $bridge = $this->app->make(ConfigBridge::class);
@@ -138,17 +121,11 @@ final class OptionsServiceProvider extends PackageServiceProvider
 
         $bridge->seedFromConfig($map);
 
+        // Live re-sync on set/forget is called by the write path itself (BaseOption),
+        // not through an event listener, so it runs with events off too.
         if ($bridge->hasMappings()) {
             rescue(fn () => $bridge->apply(), report: false);
         }
-
-        Event::listen(OptionSet::class, function (OptionSet $event) use ($bridge): void {
-            rescue(fn () => $bridge->syncOptionKey($event->key), report: false);
-        });
-
-        Event::listen(OptionForgotten::class, function (OptionForgotten $event) use ($bridge): void {
-            rescue(fn () => $bridge->syncOptionKey($event->key), report: false);
-        });
     }
 
     private static function switch(string $key, bool $default): string
