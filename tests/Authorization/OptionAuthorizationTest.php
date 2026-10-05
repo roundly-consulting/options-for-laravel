@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use RoundlyConsulting\Options\DataTransferObjects\OptionPayload;
 use RoundlyConsulting\Options\Exceptions\UnauthorizedOption;
@@ -9,6 +11,8 @@ use RoundlyConsulting\Options\Facades\Options;
 use RoundlyConsulting\Options\Option;
 use RoundlyConsulting\Options\Tests\Models\User;
 use RoundlyConsulting\Options\Tests\Options\AdminOnlyOption;
+use RoundlyConsulting\Options\Tests\Options\LocaleOption;
+use RoundlyConsulting\Options\Tests\Options\PlainInterfaceOption;
 use RoundlyConsulting\Options\Tests\Options\ThemeOption;
 
 beforeEach(function (): void {
@@ -257,6 +261,26 @@ describe('export and import under enforcement', function (): void {
         expect(Options::actingAs($user, fn () => Options::get(AdminOnlyOption::class)))->toBe('by-admin')
             ->and(Options::get(ThemeOption::class, $user))->toBe('blue');
     });
+
+    it('checks each owner once, and lets a plain OptionInterface row through', function (): void {
+        $owner = User::query()->create();
+        Options::withoutAuthorization(fn () => Options::setMany([ThemeOption::class => 'blue', LocaleOption::class => 'sk'], $owner));
+        Option::query()->create(['key' => 'plain', 'value' => 'kept-by-its-own-class']);
+        Options::register(['locale' => LocaleOption::class, 'plain' => PlainInterfaceOption::class]);
+
+        $queries = 0;
+        DB::listen(function (QueryExecuted $query) use (&$queries): void {
+            $queries += str_contains($query->sql, '"users"') || str_contains($query->sql, '`users`') ? 1 : 0;
+        });
+
+        expect(array_map(static fn (OptionPayload $payload): string => $payload->key, Options::export()))
+            ->toBe(['theme', 'theme', 'locale', 'plain'])
+            ->and($queries)->toBe(1);
+    });
+
+    it('refuses to import a row whose owner type is not a model', function (): void {
+        Options::import([['key' => 'theme', 'value' => 'blue', 'owner_type' => 'not-a-model', 'owner_id' => 1]]);
+    })->throws(UnauthorizedOption::class, 'theme');
 
     it('filters and refuses the same way under the fake', function (): void {
         $fake = Options::fake();
