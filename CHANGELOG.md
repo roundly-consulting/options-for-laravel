@@ -6,6 +6,8 @@ All notable changes to `options-for-laravel` are documented in this file. The fo
 
 ## Unreleased
 
+## 1.1.1 - 2026-10-11
+
 ### Changed
 
 - Maintenance: requires the latest roundly packages — package-toolkit `^1.3.0`; dev: testing
