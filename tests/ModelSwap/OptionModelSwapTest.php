@@ -68,3 +68,15 @@ it('reads through the swapped model after a cache round-trip', function (): void
 // defaults to the packaged model — is pinned once in tests/ArchTest.php by
 // `ArchPresets::swappableModelsAreNotFinal()`. It deliberately does NOT live here: that
 // preset asserts the config *default*, which this directory has swapped away.
+
+/**
+ * The factory named the packaged Option, so `Option::factory()` built the packaged class after a
+ * host swapped it: the host's model events never ran.
+ */
+it('builds the swapped option model from the factory', function (): void {
+    CustomOption::resetCreationCount();
+
+    expect(Option::factory()->create()::class)->toBe(CustomOption::class)
+        ->and(CustomOption::factory()->create()::class)->toBe(CustomOption::class)
+        ->and(CustomOption::creationCount())->toBe(2);
+});

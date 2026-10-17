@@ -7,6 +7,7 @@ namespace RoundlyConsulting\Options\Database\Factories;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Model;
 use RoundlyConsulting\Options\Option;
+use RoundlyConsulting\Options\Support\OptionModel;
 
 /**
  * @extends Factory<Option>
@@ -14,6 +15,17 @@ use RoundlyConsulting\Options\Option;
 final class OptionFactory extends Factory
 {
     protected $model = Option::class;
+
+    /**
+     * Build the model the host configured in `options.model`, not the packaged one,
+     * so a host subclass comes out of the factory with its own events and observers.
+     *
+     * @return class-string<Option>
+     */
+    public function modelName(): string
+    {
+        return OptionModel::class();
+    }
 
     /**
      * @return array<string, mixed>
