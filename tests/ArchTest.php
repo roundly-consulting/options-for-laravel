@@ -95,6 +95,12 @@ ArchPresets::noLocalCryptoPrimitives('RoundlyConsulting\Options');
  */
 
 /**
+ * The factory half has no `new static` ban, so it is adopted: a host swap of `options.model`
+ * reaches `Option::factory()` too, which builds the configured model through the seam.
+ */
+ArchPresets::factoriesResolveThroughSeam(__DIR__.'/../database/factories', __DIR__.'/../src', 'Support');
+
+/**
  * The morph-key seam, guarded. The options table reaches its polymorphic owner column through
  * `morphKey($name, KeyType::fromConfig('options.key_type'))`, never a raw `$table->morphs()`,
  * so a uuid/ulid host keys option ownership coherently — a hardcoded bigint id breaks those
