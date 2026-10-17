@@ -4,14 +4,18 @@ declare(strict_types=1);
 
 namespace RoundlyConsulting\Options\Tests;
 
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use RoundlyConsulting\Options\OptionsServiceProvider;
 use RoundlyConsulting\Testing\PackageTestCase;
 
 abstract class TestCase extends PackageTestCase
 {
+    /**
+     * One key per process, not per test: the key is config, and config is part of the kept
+     * schema's signature — a new key each test would migrate each test.
+     */
+    private static ?string $appKey = null;
+
     /**
      * Every provider options needs, in registration order. A host auto-discovers these;
      * the suite must list them or the test environment is a fiction.
@@ -27,12 +31,22 @@ abstract class TestCase extends PackageTestCase
      * The options migration, named by **provider class** rather than by the directory it
      * happens to sit in: the base case reflects on the provider to find its
      * `database/migrations`, so a relocated directory can never silently stop being loaded.
+     * The fixtures add the host-owned `users` table options hang off.
      *
      * @return list<class-string<ServiceProvider>|string>
      */
     protected function migrationSources(): array
     {
-        return [OptionsServiceProvider::class];
+        return [OptionsServiceProvider::class, __DIR__.'/Fixtures/migrations'];
+    }
+
+    /**
+     * Migrate once per worker and reset only the data between tests. The migration reads
+     * config alone (the key type), which the schema signature already covers.
+     */
+    protected function keepsMigratedSchema(): bool
+    {
+        return true;
     }
 
     /**
@@ -50,20 +64,7 @@ abstract class TestCase extends PackageTestCase
     protected function configBeforeBoot(): array
     {
         return array_merge(parent::configBeforeBoot(), [
-            'app.key' => 'base64:'.base64_encode(random_bytes(32)),
+            'app.key' => self::$appKey ??= 'base64:'.base64_encode(random_bytes(32)),
         ]);
-    }
-
-    /**
-     * The host-owned entity options hang off. It is an ad-hoc `Schema::create()` rather
-     * than a migration on purpose: `owner` is a polymorphic, deliberately unconstrained
-     * `nullableMorphs`, so the owner's table is the host's business and nothing here is
-     * shipped schema with an order to pin.
-     */
-    protected function defineDatabaseMigrations(): void
-    {
-        parent::defineDatabaseMigrations();
-
-        Schema::create('users', fn (Blueprint $table) => $table->id());
     }
 }
