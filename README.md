@@ -25,7 +25,7 @@ any Eloquent model (a user, a team, a tenant) and are cached, typed and evented.
 
 ## Installation
 
-Requires PHP 8.4 and Laravel 12 or 13.
+Requires PHP 8.4 and Laravel 13.
 
 ```bash
 composer require roundly-consulting/options-for-laravel
